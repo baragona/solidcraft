@@ -784,6 +784,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn feature_toolbar_stacks_related_commands_in_smaller_windows() {
+        let mut h = crate::scenario::Harness::new();
+        h.call("ui.prefs", json!({"feature_workspace":true}));
+        h.call("ui.resize", json!({"width":1000,"height":700}));
+        h.frames(3);
+        let boss = crate::scenario::handle_at("toolbar:solid.extrude.boss").unwrap();
+        let cut = crate::scenario::handle_at("toolbar:solid.extrude.cut").unwrap();
+        assert_eq!(boss.x, cut.x);
+        assert!(cut.y > boss.y + 20.0);
+        assert!(crate::scenario::handle_at("toolbar:solid.shell").is_some());
+        assert!(crate::scenario::handle_at("toolbar:construct.plane.offset").is_some());
+        h.step(&json!({"click":{"handle":"toolbar:solid.extrude.cut"}})).unwrap();
+        assert!(matches!(h.app.dialog.as_ref().map(|d| &d.kind), Some(crate::dialogs::Kind::Extrude { operation: 2, .. })));
+    }
+
+    #[test]
     fn explicit_revolve_entries_choose_additive_and_cut_operations() {
         let mut h = crate::scenario::Harness::new();
         h.app.run("solid.box", json!({"length":20,"width":20,"height":10})).unwrap();

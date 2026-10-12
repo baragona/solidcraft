@@ -6,7 +6,7 @@ features → parametric timeline) as an open, pure-Rust, agent-drivable applicat
 ## Feature-oriented workspace (in progress)
 
 An optional feature workspace provides light application chrome, a traditional menu row,
-labeled tools with tabs below, nested profile sketches and a draggable rollback bar in the
+labeled tools with tabs below and paired command rows for denser groups, nested profile sketches and a draggable rollback bar in the
 left feature tree. Front, Top and Right reference planes are directly selectable in the tree,
 with names following the view-up convention and stable underlying plane identifiers. Full-height feature and sketch property panes sit on the left; view controls
 sit above the model and an arrow triad at its lower left. Feature rows support editing,

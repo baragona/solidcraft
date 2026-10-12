@@ -460,17 +460,18 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             let panel: &&str = &panel;
             let shown = crate::toolbar_custom::buttons(app, &tab, panel, &cmds, promote);
             let n = shown.len().max(1);
-            let width = (n as f32 * button_step).max(64.0) + 8.0;
+            let stacked = feature_workspace && shown.len() > 2;
+            let leading = usize::from(stacked && *panel == "CREATE");
+            let content_width =
+                if stacked { leading as f32 * button_step + (n - leading).div_ceil(2) as f32 * 112.0 } else { n as f32 * button_step };
+            let width = content_width.max(64.0) + 8.0;
             if !overflow.is_empty() || px + width > r.right() - 40.0 {
                 overflow.push((*panel, cmds));
                 continue;
             }
             let enabled_panel = !cmds.is_empty() || *panel == "SELECT";
             // Dropped on the panel's free space: the button goes to its end.
-            let free = Rect::from_min_size(
-                pos2(px + 4.0 + shown.len() as f32 * button_step, top + 2.0),
-                vec2((width - 8.0 - shown.len() as f32 * button_step).max(8.0), 38.0),
-            );
+            let free = Rect::from_min_size(pos2(px + 4.0 + content_width, top + 2.0), vec2(8.0, if feature_workspace { 62.0 } else { 38.0 }));
             let fresp = ui.interact(free, ui.id().with(("panel_free", panel)), Sense::hover());
             if fresp.dnd_hover_payload::<ToolbarDrag>().is_some() {
                 painter.line_segment([pos2(free.left(), free.top() + 2.0), pos2(free.left(), free.bottom() - 2.0)], Stroke::new(2.0, t.accent));
@@ -479,10 +480,19 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 drop = Some((d.0, *panel, None));
             }
             for (i, c) in shown.iter().enumerate() {
-                let br = Rect::from_min_size(
-                    pos2(px + 4.0 + i as f32 * button_step, top + 2.0),
-                    vec2(button_step - 2.0, if feature_workspace { 62.0 } else { 38.0 }),
-                );
+                let compact = stacked && i >= leading;
+                let br = if compact {
+                    let slot = i - leading;
+                    Rect::from_min_size(
+                        pos2(px + 4.0 + leading as f32 * button_step + (slot / 2) as f32 * 112.0, top + 2.0 + (slot % 2) as f32 * 32.0),
+                        vec2(110.0, 30.0),
+                    )
+                } else {
+                    Rect::from_min_size(
+                        pos2(px + 4.0 + i as f32 * button_step, top + 2.0),
+                        vec2(button_step - 2.0, if feature_workspace { 62.0 } else { 38.0 }),
+                    )
+                };
                 let info = c.info(&app.session);
                 let resp = ui.interact(br, ui.id().with(("cmd", c.id)), Sense::click_and_drag());
                 crate::scenario::publish_handle(&format!("toolbar:{}", c.id), br.center());
@@ -518,8 +528,13 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     "config.table" => "configuration_table",
                     _ => c.icon,
                 };
-                let icon_rect =
-                    if feature_workspace { Rect::from_center_size(pos2(br.center().x, br.top() + 20.0), vec2(26.0, 26.0)) } else { br.shrink(6.0) };
+                let icon_rect = if compact {
+                    Rect::from_center_size(pos2(br.left() + 12.0, br.center().y), vec2(20.0, 20.0))
+                } else if feature_workspace {
+                    Rect::from_center_size(pos2(br.center().x, br.top() + 20.0), vec2(26.0, 26.0))
+                } else {
+                    br.shrink(6.0)
+                };
                 icons::paint(&painter, icon_rect, icon, ink, fill, acc);
                 let label = match c.id {
                     "sketch.finish" if feature_workspace => "Exit Sketch",
@@ -536,9 +551,14 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                         tr_label.to_string(),
                         FontId::proportional(10.0),
                         if info.enabled { t.text } else { t.text_dim },
-                        button_step - 4.0,
+                        if compact { br.width() - 30.0 } else { button_step - 4.0 },
                     );
-                    painter.galley(pos2(br.center().x - text.size().x / 2.0, br.top() + 36.0), text, t.text);
+                    let at = if compact {
+                        pos2(br.left() + 26.0, br.center().y - text.size().y * 0.5)
+                    } else {
+                        pos2(br.center().x - text.size().x / 2.0, br.top() + 36.0)
+                    };
+                    painter.galley(at, text, t.text);
                 }
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled() && info.enabled, tr_label));
                 let tip = match &info.disabled_reason {
