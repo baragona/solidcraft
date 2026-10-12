@@ -118,3 +118,9 @@ F fits the model, Space opens View Orientation, Z/Shift+Z zoom out/in, Ctrl (or 
 select Front/Back/Left/Right/Top/Bottom/Isometric, and Ctrl/Cmd+8 looks normal to the selection
 or active sketch. These shortcuts take precedence over conflicting command bindings while
 this workspace is enabled.
+
+The feature workspace has separate Extruded Boss/Base (`solid.extrude.boss`) and Extruded
+Cut (`solid.extrude.cut`) entries. Both accept the geometric parameters of `solid.extrude`.
+Boss defaults to `join` when the active component has a body, otherwise `new`; its explicit
+operation must be `new` or `join`. Cut always uses `cut` and rejects conflicting operations.
+The original `solid.extrude` command and its automatic operation remain available.

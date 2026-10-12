@@ -53,7 +53,9 @@ pub fn buttons(app: &SolveApp, tab: &str, panel: &str, cmds: &[&'static CommandS
         None => {
             let preferred: &[&str] = if app.preferences.feature_workspace {
                 match (tab, panel) {
-                    ("SOLID", "CREATE") => &["sketch.create", "solid.extrude", "solid.revolve", "solid.sweep", "solid.loft"],
+                    ("SOLID", "CREATE") => {
+                        &["sketch.create", "solid.extrude.boss", "solid.extrude.cut", "solid.revolve", "solid.sweep", "solid.loft"]
+                    }
                     ("SOLID", "MODIFY") => &["solid.fillet", "solid.chamfer", "solid.shell", "solid.draft"],
                     ("SKETCH", "CREATE") => {
                         &["sketch.dimension", "sketch.line", "sketch.rectangle.two_point", "sketch.circle.center", "sketch.arc.three_point"]

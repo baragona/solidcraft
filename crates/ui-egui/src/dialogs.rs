@@ -314,12 +314,12 @@ impl Dialog {
         let has_bodies = !s.world_state().bodies.is_empty();
         let mut d = match id {
             "sketch.create" => Dialog::new(Kind::Sketch, vec![SelInput::new("Plane", PLANES | PLANAR_FACES, false)]),
-            "solid.extrude" => Dialog::new(
+            "solid.extrude" | "solid.extrude.boss" | "solid.extrude.cut" => Dialog::new(
                 Kind::Extrude {
                     distance: "10 mm".into(),
                     direction: 0,
-                    operation: usize::from(has_bodies),
-                    auto_op: true,
+                    operation: if id == "solid.extrude.cut" { 2 } else { usize::from(has_bodies) },
+                    auto_op: id == "solid.extrude",
                     distance2: "10 mm".into(),
                     taper: "0 deg".into(),
                     taper_present: false,
@@ -1281,7 +1281,15 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let mut cancel = false;
     let mut enter = false;
     let wide = d.is_wide();
-    let raw_title = title(&d.kind);
+    let raw_title = if app.preferences.feature_workspace {
+        match &d.kind {
+            Kind::Extrude { operation: 0 | 1, .. } => "Boss-Extrude",
+            Kind::Extrude { operation: 2, .. } => "Cut-Extrude",
+            _ => title(&d.kind),
+        }
+    } else {
+        title(&d.kind)
+    };
     let heading = if d.editing.is_some() { crate::i18n::format("dialog.edit_title", &[("title", tr(raw_title))]) } else { tr(raw_title).to_string() };
     let frame = egui::Frame::window(&ctx.global_style())
         .fill(t.dialog_bg)
@@ -1445,10 +1453,19 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                             }
                             ui.end_row();
                         }
-                        row_label(ui, "Extent Type");
+                        row_label(ui, if app.preferences.feature_workspace { "End Condition" } else { "Extent Type" });
                         let cur = if to_object_on(&d.inputs) { 1 } else { usize::from(*all) * 2 };
                         let mut ext = cur;
-                        combo(ui, "ex_ext", &["Distance", "To Object", "All"], &mut ext);
+                        combo(
+                            ui,
+                            "ex_ext",
+                            if app.preferences.feature_workspace {
+                                &["Blind", "Up to Selection", "Through All"]
+                            } else {
+                                &["Distance", "To Object", "All"]
+                            },
+                            &mut ext,
+                        );
                         *all = ext == 2;
                         set_to_object(&mut d.inputs, &mut d.active, ext == 1);
                         ui.end_row();

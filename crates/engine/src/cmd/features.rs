@@ -108,6 +108,12 @@ pub static COMMANDS: &[CommandSpec] = &[
         .key("Q")
         .params("face: [x,y,z] and distance: expr (positive adds material, negative cuts), or edges: [[x,y,z]…] and distance (a fillet)"),
     CommandSpec::new("solid.move", "Move/Copy", move_bodies).at("SOLID", "MODIFY").icon("move").key("M").params("bodies: [names]; translate?: [x,y,z] (exprs or numbers); axis?: [x,y,z]; angle?: expr"),
+    CommandSpec::new("solid.extrude.boss", "Extruded Boss/Base", extrude_boss)
+        .at("SOLID", "CREATE").icon("extrude")
+        .params("Parameters as solid.extrude; operation is join when the active component has bodies, otherwise new. Explicit operation may be new or join."),
+    CommandSpec::new("solid.extrude.cut", "Extruded Cut", extrude_cut)
+        .at("SOLID", "CREATE").icon("extrude_cut")
+        .params("Parameters as solid.extrude; operation is always cut."),
 ];
 
 /// Where an extrude starts and which way is positive: a point inside the (first) profile or
@@ -443,6 +449,33 @@ pub(super) fn add_feature(s: &mut Session, p: &Value, kind: FeatureKind) -> Resu
     let bodies: Vec<&str> = st.bodies.iter().map(|b| b.name.as_str()).collect();
     let fname = s.doc.feature(id).map(|f| f.name.clone()).unwrap_or_default();
     Ok(json!({"feature": id, "name": fname, "bodies": bodies, "ms": r.map(|r| r.ms)}))
+}
+
+fn extrude_boss(s: &mut Session, p: &Value) -> Result<Value> {
+    let mut params = p.as_object().cloned().ok_or_else(|| bad("solid.extrude.boss", "parameters must be an object"))?;
+    let operation = match str_(p, "operation") {
+        Some("new") => "new",
+        Some("join") => "join",
+        Some(_) => return Err(bad("solid.extrude.boss", "operation must be new or join")),
+        None => {
+            if s.world_state().bodies.iter().any(|body| body.component == s.active_component) {
+                "join"
+            } else {
+                "new"
+            }
+        }
+    };
+    params.insert("operation".into(), json!(operation));
+    extrude(s, &Value::Object(params))
+}
+
+fn extrude_cut(s: &mut Session, p: &Value) -> Result<Value> {
+    let mut params = p.as_object().cloned().ok_or_else(|| bad("solid.extrude.cut", "parameters must be an object"))?;
+    if str_(p, "operation").is_some_and(|op| op != "cut") {
+        return Err(bad("solid.extrude.cut", "operation must be cut"));
+    }
+    params.insert("operation".into(), json!("cut"));
+    extrude(s, &Value::Object(params))
 }
 
 fn extrude(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1429,3 +1462,32 @@ mod offset_identity_tests;
 #[cfg(test)]
 #[path = "offset_edit_guard_tests.rs"]
 mod offset_edit_guard_tests;
+
+#[cfg(test)]
+mod extrude_workflow_tests {
+    use super::*;
+
+    #[test]
+    fn boss_and_cut_have_explicit_material_semantics() {
+        let mut s = Session::default();
+        s.execute("sketch.create", &json!({"plane":"XY"})).unwrap();
+        s.execute("sketch.rectangle.two_point", &json!({"p0":[0,0],"p1":[20,20]})).unwrap();
+        s.execute("solid.extrude.boss", &json!({"distance":10})).unwrap();
+        s.execute("sketch.create", &json!({"plane":"XY"})).unwrap();
+        s.execute("sketch.rectangle.two_point", &json!({"p0":[5,5],"p1":[15,15]})).unwrap();
+        s.execute("solid.extrude.boss", &json!({"distance":5,"start_offset":10})).unwrap();
+        let volume = s.execute("inspect.measure", &json!({})).unwrap()["total"]["volume_mm3"].as_f64().unwrap();
+        assert!((volume - 4500.0).abs() < 0.01, "{volume}");
+        s.execute("sketch.create", &json!({"plane":"XY"})).unwrap();
+        s.execute("sketch.circle.center", &json!({"center":[10,10],"radius":2})).unwrap();
+        let before = s.doc.to_json();
+        assert!(s.execute("solid.extrude.cut", &json!({"distance":15,"operation":"join"})).is_err());
+        assert!(s.execute("solid.extrude.boss", &json!({"distance":15,"operation":"cut"})).is_err());
+        assert_eq!(s.doc.to_json(), before);
+        s.execute("solid.extrude.cut", &json!({"distance":15})).unwrap();
+        let volume = s.execute("inspect.measure", &json!({})).unwrap()["total"]["volume_mm3"].as_f64().unwrap();
+        let expected = 4500.0 - std::f64::consts::PI * 4.0 * 15.0;
+        // inspect.measure integrates the tessellated mesh, so curved walls have chord error.
+        assert!((volume - expected).abs() < expected * 1e-4, "{volume} != {expected}");
+    }
+}
