@@ -627,6 +627,9 @@ fn component_rows(app: &mut SolveApp, ui: &mut egui::Ui, id: u64, depth: usize, 
     if id == 0 {
         doc_settings(app, ui, d);
         named_view_rows(app, ui, d, acts);
+        if app.preferences.feature_workspace {
+            reference_plane_rows(app, ui, d);
+        }
         origin_rows(app, ui, d);
         canvas_rows(app, ui, d, acts);
     }
@@ -776,6 +779,22 @@ fn doc_settings(app: &mut SolveApp, ui: &mut egui::Ui, depth: usize) {
     }
 }
 
+/// Familiar names follow the chosen view-up convention; stored plane identifiers stay stable.
+fn reference_plane_rows(app: &mut SolveApp, ui: &mut egui::Ui, depth: usize) {
+    let y_up = app.ui.up_axis == solvecraft_engine::render::UpAxis::Y;
+    let planes = [("Front Plane", if y_up { "XY" } else { "XZ" }), ("Top Plane", if y_up { "XZ" } else { "XY" }), ("Right Plane", "YZ")];
+    for (label, name) in planes {
+        let selected = app.session.selection.contains(&Sel::Plane { name: name.into() });
+        let r = draw_row(ui, ui.id().with(("reference_plane", name)), &Row { depth, icon: "plane", label, selected, ..Default::default() });
+        if let Some(response) = r.resp {
+            response.on_hover_text(format!("{label} ({name}) — select to start a sketch"));
+        }
+        if r.clicked {
+            pick_from_browser(app, Sel::Plane { name: name.into() });
+        }
+    }
+}
+
 fn origin_rows(app: &mut SolveApp, ui: &mut egui::Ui, depth: usize) {
     let key = "origin";
     let open = is_open(app, key, false);
@@ -806,6 +825,9 @@ fn origin_rows(app: &mut SolveApp, ui: &mut egui::Ui, depth: usize) {
         ("YZ", "plane", "YZ"),
     ];
     for (k, icon, label) in items {
+        if app.preferences.feature_workspace && icon == "plane" {
+            continue;
+        }
         let visible = !app.session.visibility.hidden_origin.iter().any(|h| h == k);
         let sel = match icon {
             "plane" => Some(Sel::Plane { name: k.into() }),

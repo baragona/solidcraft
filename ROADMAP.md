@@ -7,7 +7,8 @@ features → parametric timeline) as an open, pure-Rust, agent-drivable applicat
 
 An optional feature workspace provides light application chrome, a traditional menu row,
 labeled tools with tabs below, nested profile sketches and a draggable rollback bar in the
-left feature tree. Full-height feature and sketch property panes sit on the left; view controls
+left feature tree. Front, Top and Right reference planes are directly selectable in the tree,
+with names following the view-up convention and stable underlying plane identifiers. Full-height feature and sketch property panes sit on the left; view controls
 sit above the model and an arrow triad at its lower left. Feature rows support editing,
 suppression, renaming and deletion through existing commands. Mac trackpad navigation supports
 two-finger pan, Option-scroll orbit and pinch zoom. View shortcuts include F, Space, Z/Shift+Z

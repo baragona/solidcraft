@@ -784,6 +784,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn feature_plane_rows_select_by_view_convention() {
+        for (up, front, top) in [("z", "XZ", "XY"), ("y", "XY", "XZ")] {
+            let mut h = crate::scenario::Harness::new();
+            h.call("ui.prefs", json!({"feature_workspace":true,"up_axis":up}));
+            h.frames(3);
+            for (label, name) in [("Front Plane", front), ("Top Plane", top), ("Right Plane", "YZ")] {
+                h.step(&json!({"click":{"handle":format!("row:{label}")}})).unwrap();
+                h.frames(3);
+                assert_eq!(h.app.session.selection, vec![solvecraft_engine::Sel::Plane { name: name.into() }]);
+            }
+        }
+    }
+
+    #[test]
     fn feature_workspace_absorbs_sketches_and_keeps_view_controls_clear() {
         let mut h = crate::scenario::Harness::new();
         h.app.preferences.feature_workspace = true;
