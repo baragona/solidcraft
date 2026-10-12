@@ -1274,7 +1274,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let t = Tokens::get();
     let vp = app.viewport.rect.unwrap_or_else(|| ctx.content_rect());
     let top = (vp.top() + crate::viewport::AXIS_VIEW_CLEARANCE).min((vp.bottom() - 360.0).max(vp.top()));
-    let anchor = egui::pos2(vp.right(), top);
+    let anchor = if app.preferences.feature_workspace { egui::pos2(ctx.content_rect().left(), vp.top()) } else { egui::pos2(vp.right(), top) };
     let mut keep = true;
     let mut ok = false;
     let mut applied = false;
@@ -1303,6 +1303,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         vp.bottom() - anchor.y - 8.0,
         width,
     )
+    .pivot(if app.preferences.feature_workspace { egui::Align2::LEFT_TOP } else { egui::Align2::RIGHT_TOP })
     .frame(frame)
     .open(&mut keep)
     .show(ctx, |ui| {

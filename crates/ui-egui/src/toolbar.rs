@@ -356,11 +356,12 @@ fn export(app: &mut SolveApp, ext: &str) {
 pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     let sketching = app.session.active_sketch.is_some();
-    egui::Panel::top("sc_toolbar").exact_size(92.0).frame(egui::Frame::NONE.fill(t.toolbar)).show(ui, |ui| {
+    let feature_workspace = app.preferences.feature_workspace;
+    egui::Panel::top("sc_toolbar").exact_size(if feature_workspace { 116.0 } else { 92.0 }).frame(egui::Frame::NONE.fill(t.toolbar)).show(ui, |ui| {
         let r = ui.max_rect();
         let painter = ui.painter().clone();
         // Workspace selector and tabs.
-        let tabs_y = r.top() + 2.0;
+        let tabs_y = if feature_workspace { r.bottom() - 24.0 } else { r.top() + 2.0 };
         // The workspace switcher spans the toolbar's height (the tab row and the panel row).
         let ws = Rect::from_min_max(pos2(r.left() + 6.0, r.top() + 4.0), pos2(r.left() + 104.0, r.bottom() - 5.0));
         let wresp = ui.interact(ws, ui.id().with("workspace_switcher"), Sense::click());
@@ -382,12 +383,24 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         crate::scenario::publish_rect("workspace_switcher", ws);
         let mut x = r.left() + 112.0;
         let mut tabs: Vec<&str> = Vec::new();
-        if sketching {
+        if sketching || feature_workspace {
             tabs.push("SKETCH");
         }
         tabs.extend(TABS.iter());
         for tab in tabs {
-            let display_tab = app.tr_label(tab);
+            let display_tab = if feature_workspace {
+                match tab {
+                    "SOLID" => "Features",
+                    "SKETCH" => "Sketch",
+                    "SURFACE" => "Surfaces",
+                    "SHEET METAL" => "Sheet Metal",
+                    "MESH" => "Mesh",
+                    "PLASTIC" => "Plastics",
+                    _ => "Evaluate",
+                }
+            } else {
+                app.tr_label(tab)
+            };
             let text_width = painter.layout_no_wrap(display_tab.to_string(), FontId::proportional(12.0), t.text).size().x;
             let w = 12.0 + text_width.max(28.0);
             let tr = Rect::from_min_size(pos2(x, tabs_y), vec2(w, 22.0));
@@ -423,7 +436,8 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             _ => None,
         };
         let mut px = r.left() + 112.0;
-        let top = r.top() + 26.0;
+        let top = r.top() + if feature_workspace { 2.0 } else { 26.0 };
+        let button_step = if feature_workspace { 72.0 } else { 40.0 };
         let mut drop: Option<(&'static str, &'static str, Option<&'static str>)> = None;
         let mut menu: Option<(egui::Pos2, &'static str)> = None;
         let mut overflow = Vec::new();
@@ -431,7 +445,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             let panel: &&str = &panel;
             let shown = crate::toolbar_custom::buttons(app, &tab, panel, &cmds, promote);
             let n = shown.len().max(1);
-            let width = (n as f32 * 40.0).max(64.0) + 8.0;
+            let width = (n as f32 * button_step).max(64.0) + 8.0;
             if !overflow.is_empty() || px + width > r.right() - 40.0 {
                 overflow.push((*panel, cmds));
                 continue;
@@ -439,8 +453,8 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             let enabled_panel = !cmds.is_empty() || *panel == "SELECT";
             // Dropped on the panel's free space: the button goes to its end.
             let free = Rect::from_min_size(
-                pos2(px + 4.0 + shown.len() as f32 * 40.0, top + 2.0),
-                vec2((width - 8.0 - shown.len() as f32 * 40.0).max(8.0), 38.0),
+                pos2(px + 4.0 + shown.len() as f32 * button_step, top + 2.0),
+                vec2((width - 8.0 - shown.len() as f32 * button_step).max(8.0), 38.0),
             );
             let fresp = ui.interact(free, ui.id().with(("panel_free", panel)), Sense::hover());
             if fresp.dnd_hover_payload::<ToolbarDrag>().is_some() {
@@ -450,7 +464,10 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 drop = Some((d.0, *panel, None));
             }
             for (i, c) in shown.iter().enumerate() {
-                let br = Rect::from_min_size(pos2(px + 4.0 + i as f32 * 40.0, top + 2.0), vec2(38.0, 38.0));
+                let br = Rect::from_min_size(
+                    pos2(px + 4.0 + i as f32 * button_step, top + 2.0),
+                    vec2(button_step - 2.0, if feature_workspace { 62.0 } else { 38.0 }),
+                );
                 let info = c.info(&app.session);
                 let resp = ui.interact(br, ui.id().with(("cmd", c.id)), Sense::click_and_drag());
                 crate::scenario::publish_handle(&format!("toolbar:{}", c.id), br.center());
@@ -486,13 +503,24 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     "config.table" => "configuration_table",
                     _ => c.icon,
                 };
-                icons::paint(&painter, br.shrink(6.0), icon, ink, fill, acc);
+                let icon_rect =
+                    if feature_workspace { Rect::from_center_size(pos2(br.center().x, br.top() + 20.0), vec2(26.0, 26.0)) } else { br.shrink(6.0) };
+                icons::paint(&painter, icon_rect, icon, ink, fill, acc);
                 let label = match c.id {
                     "parameters.change" if *panel == "CONFIGURE" => "Parameters",
                     "config.table" if *panel == "CONFIGURE" => "Configurations",
                     _ => c.label,
                 };
                 let tr_label = app.tr_label(label);
+                if feature_workspace {
+                    let text = painter.layout(
+                        tr_label.to_string(),
+                        FontId::proportional(10.0),
+                        if info.enabled { t.text } else { t.text_dim },
+                        button_step - 4.0,
+                    );
+                    painter.galley(pos2(br.center().x - text.size().x / 2.0, br.top() + 36.0), text, t.text);
+                }
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled() && info.enabled, tr_label));
                 let tip = match &info.disabled_reason {
                     Some(why) => format!("{}\n{why}", tr_label),
@@ -508,7 +536,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 painter.text(br.center(), Align2::CENTER_CENTER, "—", FontId::proportional(14.0), t.border);
             }
             // Panel label with drop-down.
-            let lr = Rect::from_min_size(pos2(px, top + 42.0), vec2(width, 18.0));
+            let lr = Rect::from_min_size(pos2(px, top + if feature_workspace { 66.0 } else { 42.0 }), vec2(width, 18.0));
             let label = app.tr_label(panel).to_string();
             let lresp = ui.interact(lr, ui.id().with(("panel", panel)), Sense::click());
             crate::scenario::publish_handle(&format!("panel:{tab}:{panel}"), lr.center());

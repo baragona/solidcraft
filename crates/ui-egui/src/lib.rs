@@ -981,11 +981,11 @@ impl SolveApp {
             }
         }
         toolbar::toolbar(self, ui);
-        if self.ui.show_timeline {
+        if self.ui.show_timeline && !self.preferences.feature_workspace {
             timeline::timeline(self, ui);
         }
         palette::palette_bar(self, ui);
-        if self.ui.show_browser {
+        if self.ui.show_browser || (self.preferences.feature_workspace && self.dialog.is_some()) {
             browser::browser(self, ui);
         }
         preview::update(self, ui.ctx());

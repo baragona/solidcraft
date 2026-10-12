@@ -35,6 +35,10 @@ pub struct Prefs {
     pub default_units: String,
     /// Mouse mapping: `fusion`, `solidworks` or `inventor`.
     pub nav: String,
+    /// Feature-oriented workspace with a left feature tree and property panel.
+    pub feature_workspace: bool,
+    /// Two-finger pan, Option+two-finger orbit, pinch zoom.
+    pub trackpad: bool,
     /// Show the radial ring and enable hold/flick gestures for viewport context menus.
     pub radial_context_menu: bool,
     /// The wheel zooms out when turned forward.
@@ -74,6 +78,8 @@ impl Default for Prefs {
         Prefs {
             default_units: "mm".into(),
             nav: "fusion".into(),
+            feature_workspace: false,
+            trackpad: false,
             radial_context_menu: false,
             zoom_reverse: false,
             orbit_cursor: false,
@@ -172,6 +178,7 @@ fn defaults(app: &mut SolveApp, page: usize) {
     match page {
         0 => {
             p.theme = d.theme;
+            p.feature_workspace = d.feature_workspace;
             p.language = d.language;
             p.ui_scale = d.ui_scale;
             p.default_units = d.default_units;
@@ -184,6 +191,7 @@ fn defaults(app: &mut SolveApp, page: usize) {
         }
         1 => {
             p.nav = d.nav;
+            p.trackpad = d.trackpad;
             p.radial_context_menu = d.radial_context_menu;
             p.zoom_reverse = d.zoom_reverse;
             p.zoom_to_cursor = d.zoom_to_cursor;
@@ -499,6 +507,9 @@ fn page(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
     }
     egui::Grid::new(("sc_prefs_grid", app.prefs_window.section)).num_columns(2).spacing([16.0, 8.0]).show(ui, |ui| match app.prefs_window.section {
         0 => {
+            ui.label("Workspace");
+            ui.checkbox(&mut app.preferences.feature_workspace, "Feature tree and left property panel");
+            ui.end_row();
             ui.label(app.tr("ui.language"));
             egui::ComboBox::from_id_salt("pref_language").selected_text(crate::i18n::Locale::for_language(&app.preferences.language).name()).show_ui(
                 ui,
@@ -559,6 +570,10 @@ fn page(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
             ui.end_row();
         }
         1 => {
+            ui.label("Input device");
+            ui.checkbox(&mut app.preferences.trackpad, "Trackpad navigation");
+            ui.end_row();
+            note(ui, "Two-finger scroll pans; Option + scroll orbits; pinch zooms. Shift + scroll also zooms.");
             ui.label("Pan, zoom, orbit");
             egui::ComboBox::from_id_salt("pref_nav")
                 .selected_text(NAV_PRESETS.iter().find(|(id, _)| *id == app.preferences.nav).map_or("Fusion", |x| x.1))
@@ -767,6 +782,32 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn feature_tree_opens_edit_panel_outside_the_model_view() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.preferences.feature_workspace = true;
+        h.call("engine.execute", json!({"command":"solid.box","params":{"length":20,"width":30,"height":10}}));
+        h.frames(3);
+        let feature = h.app.session.doc.features.last().unwrap().clone();
+        h.step(&json!({"click":{"handle":format!("feature:{}",feature.name)},"double":true})).unwrap();
+        h.frames(4);
+        assert!(h.app.dialog.is_some());
+        let dialog = h.app.viewport.dialog_rect.unwrap();
+        let viewport = h.app.viewport.rect.unwrap();
+        assert!(dialog.right() <= viewport.left() + 1.0, "property pane {dialog:?} overlaps model {viewport:?}");
+    }
+
+    #[test]
+    fn feature_workspace_and_trackpad_preferences_persist() {
+        let mut app = SolveApp::new(solvecraft_engine::Session::default(), Default::default());
+        set(&mut app, &json!({"feature_workspace":true,"trackpad":true,"nav":"solidworks","theme":"light"})).unwrap();
+        let mut restored = SolveApp::new(solvecraft_engine::Session::default(), Default::default());
+        restored.load_prefs(&app.prefs());
+        assert!(restored.preferences.feature_workspace && restored.preferences.trackpad);
+        assert_eq!(restored.preferences.nav, "solidworks");
+        assert_eq!(restored.preferences.theme, "light");
+    }
 
     #[test]
     fn radial_context_menu_defaults_off_and_follows_preferences_transactions() {

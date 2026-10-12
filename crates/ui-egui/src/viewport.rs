@@ -1542,7 +1542,35 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
         scroll
     };
     let h = rect.height().max(1.0) as f64;
-    if inside && scroll != 0.0 {
+    if inside && app.preferences.trackpad {
+        let (movement, pinch) = ui.input(|i| {
+            let movement = i
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    egui::Event::MouseWheel { delta, phase: egui::TouchPhase::Move, .. } => Some(*delta),
+                    _ => None,
+                })
+                .fold(egui::Vec2::ZERO, |sum, delta| sum + delta);
+            (movement, i.zoom_delta())
+        });
+        if movement != egui::Vec2::ZERO || pinch != 1.0 {
+            app.cancel_view_animation();
+            app.viewport.orbit_snap = None;
+            app.viewport.orbit_free = None;
+            if mods.alt {
+                crate::prefs::orbit(app, rect, f64::from(movement.x), f64::from(movement.y), hover);
+            } else if mods.shift {
+                app.cam.zoom_at((f64::from(movement.y + movement.x) * 0.01).exp(), None);
+            } else if !mods.ctrl && !mods.command {
+                app.cam.pan(f64::from(movement.x), f64::from(movement.y), h);
+            }
+            if pinch.is_finite() && pinch > 0.0 && pinch != 1.0 {
+                app.cam.zoom_at(1.0 / f64::from(pinch), None);
+            }
+        }
+    }
+    if inside && scroll != 0.0 && !app.preferences.trackpad {
         app.viewport.orbit_snap = None;
         app.viewport.orbit_free = None;
         let f = (-scroll as f64 * 0.0015 * crate::prefs::zoom_sign(app)).exp();
@@ -2696,6 +2724,44 @@ fn view_menu(app: &mut SolveApp, ui: &mut egui::Ui, button: Rect) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trackpad_pan_orbit_and_pinch_are_independent() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.preferences.trackpad = true;
+        h.call("ui.move", json!({"x":800,"y":500}));
+        let before = h.app.cam;
+        h.app.synthetic.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(30.0, 20.0),
+            modifiers: egui::Modifiers::NONE,
+            phase: egui::TouchPhase::Move,
+        });
+        h.frame();
+        assert_ne!(h.app.cam.target, before.target);
+        assert_eq!(h.app.cam.distance, before.distance);
+        assert_eq!(h.app.cam.yaw, before.yaw);
+        let panned = h.app.cam;
+        h.frames(20);
+        assert_eq!(h.app.cam, panned, "scroll inertia must not replay as zoom");
+        h.app.synthetic.push(egui::Event::Zoom(1.25));
+        h.frame();
+        assert!((h.app.cam.half_height() - panned.half_height() / 1.25).abs() < 1e-6);
+        assert_eq!(h.app.cam.target, panned.target);
+        let zoomed = h.app.cam;
+        let option = egui::Modifiers { alt: true, ..Default::default() };
+        h.app.synthetic.push(egui::Event::ModifiersChanged(option));
+        h.app.synthetic.push(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: vec2(35.0, 10.0),
+            modifiers: option,
+            phase: egui::TouchPhase::Move,
+        });
+        h.frame();
+        assert_ne!(h.app.cam.yaw, zoomed.yaw);
+        assert_eq!(h.app.cam.target, zoomed.target);
+        assert_eq!(h.app.cam.distance, zoomed.distance);
+    }
 
     #[test]
     fn cpu_viewport_uses_section_preview_and_sketch_slice() {

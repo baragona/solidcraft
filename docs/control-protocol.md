@@ -99,3 +99,14 @@ regardless of the up-axis preference. Clicking an aligned tip again flips to its
 
 Shift-orbit snapping includes 45-degree edge views and isometric corner views, with a
 lightly damped spring transition and a small boundary margin to prevent flicker.
+
+## Feature workspace and Mac trackpad
+
+`ui.prefs {"feature_workspace":true,"trackpad":true,"nav":"solidworks","theme":"light"}`
+enables the feature-oriented layout and trackpad controls. These preferences persist across
+launches and are also available in Preferences (General and Navigation).
+
+The left feature history supports selection, double-click editing, and context-menu edit,
+suppress, rename, delete and rollback actions. Command properties occupy the left pane.
+Trackpad gestures over the model: two-finger scroll pans, Option + scroll orbits, pinch zooms,
+and Shift + scroll zooms. Gestures over panels remain available for scrolling those panels.

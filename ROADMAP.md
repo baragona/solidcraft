@@ -3,6 +3,14 @@
 Status as of **2026-10-11**. SolidCraft supports parametric modelling (sketch →
 features → parametric timeline) as an open, pure-Rust, agent-drivable application.
 
+## Feature-oriented workspace (in progress)
+
+An optional feature workspace provides labeled tools, tabs below the toolbar, left-side
+feature history and command properties. Feature rows support editing, suppression, renaming,
+deletion and rollback through the existing command system. Mac trackpad navigation supports
+two-finger pan, Option-scroll orbit and pinch zoom. SolidWorks-style feature/sketch organization,
+shortcuts and operation-specific workflows are still being refined.
+
 ## At a glance
 
 | Question | Answer |

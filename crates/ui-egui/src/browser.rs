@@ -502,11 +502,18 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
     OCCURRENCES.with(|d| d.borrow_mut().clear());
     let mut acts = Actions::default();
     egui::Panel::left("sc_browser")
-        .exact_size(250.0)
+        .exact_size(if app.preferences.feature_workspace {
+            app.dialog.as_ref().map_or(250.0, |d| if d.is_wide() { 560.0 } else { 380.0 })
+        } else {
+            250.0
+        })
         .resizable(false)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(6, 6)))
         .show(ui, |ui| {
-            ui.label(RichText::new("BROWSER").size(11.0).strong().color(t.text_dim));
+            if app.preferences.feature_workspace && app.dialog.is_some() {
+                return;
+            }
+            ui.label(RichText::new(if app.preferences.feature_workspace { "FEATURES" } else { "BROWSER" }).size(11.0).strong().color(t.text_dim));
             ui.add_space(4.0);
             egui::ScrollArea::vertical()
                 .auto_shrink([false, false])
@@ -514,6 +521,10 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
                 .show(ui, |ui| {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     component_rows(app, ui, 0, 0, &mut acts);
+                    if app.preferences.feature_workspace {
+                        ui.separator();
+                        crate::timeline::feature_tree(app, ui);
+                    }
                 });
         });
     app.viewport.hover_bodies = acts.hover_bodies;
