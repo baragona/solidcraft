@@ -11,7 +11,8 @@ left feature tree. Full-height feature and sketch property panes sit on the left
 sit above the model and an arrow triad at its lower left. Feature rows support editing,
 suppression, renaming and deletion through existing commands. Mac trackpad navigation supports
 two-finger pan, Option-scroll orbit and pinch zoom. View shortcuts include F, Space, Z/Shift+Z
-and Ctrl/Cmd+1–8. Operation-specific boss/cut workflows remain to be refined.
+and Ctrl/Cmd+1–8. The Sketch toolbar prioritizes dimensions, basic shapes, trim and offset,
+with Exit Sketch first so it remains visible in narrow windows. Operation-specific boss/cut workflows remain to be refined.
 
 ## At a glance
 

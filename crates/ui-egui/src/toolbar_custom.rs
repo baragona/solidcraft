@@ -50,7 +50,25 @@ fn key(tab: &str, panel: &str) -> String {
 pub fn buttons(app: &SolveApp, tab: &str, panel: &str, cmds: &[&'static CommandSpec], promoted: usize) -> Vec<&'static CommandSpec> {
     match app.toolbar_custom.panels.get(&key(tab, panel)) {
         Some(ids) => ids.iter().filter_map(|id| solvecraft_engine::find_command(id)).collect(),
-        None => cmds.iter().take(promoted).copied().collect(),
+        None => {
+            let preferred: &[&str] = if app.preferences.feature_workspace {
+                match (tab, panel) {
+                    ("SKETCH", "CREATE") => {
+                        &["sketch.dimension", "sketch.line", "sketch.rectangle.two_point", "sketch.circle.center", "sketch.arc.three_point"]
+                    }
+                    ("SKETCH", "MODIFY") => &["sketch.trim", "sketch.offset"],
+                    ("SKETCH", "CONSTRAINTS") => &["sketch.constraint.horizontal_vertical", "sketch.constraint.coincident"],
+                    _ => &[],
+                }
+            } else {
+                &[]
+            };
+            if preferred.is_empty() {
+                cmds.iter().take(promoted).copied().collect()
+            } else {
+                preferred.iter().filter_map(|id| cmds.iter().find(|c| c.id == *id).copied()).collect()
+            }
+        }
     }
 }
 
@@ -77,8 +95,11 @@ fn own(app: &mut SolveApp, tab: &str, panel: &str) -> Vec<String> {
         return v.clone();
     }
     let lists = panel_lists(tab);
-    let ids: Vec<String> =
-        lists.iter().find(|(p, ..)| *p == panel).map(|(_, cmds, n)| cmds.iter().take(*n).map(|c| c.id.to_string()).collect()).unwrap_or_default();
+    let ids: Vec<String> = lists
+        .iter()
+        .find(|(p, ..)| *p == panel)
+        .map(|(_, cmds, n)| buttons(app, tab, panel, cmds, *n).iter().map(|c| c.id.to_string()).collect())
+        .unwrap_or_default();
     ids
 }
 

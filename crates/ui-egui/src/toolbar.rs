@@ -447,7 +447,12 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         let mut drop: Option<(&'static str, &'static str, Option<&'static str>)> = None;
         let mut menu: Option<(egui::Pos2, &'static str)> = None;
         let mut overflow = Vec::new();
-        for (panel, cmds, promote) in crate::toolbar_custom::panel_lists(&tab) {
+        let mut panel_lists = crate::toolbar_custom::panel_lists(&tab);
+        if feature_workspace && tab == "SKETCH" {
+            // Keep the way out of sketch editing visible even in a narrow window.
+            panel_lists.sort_by_key(|(panel, ..)| *panel != "FINISH SKETCH");
+        }
+        for (panel, cmds, promote) in panel_lists {
             let panel: &&str = &panel;
             let shown = crate::toolbar_custom::buttons(app, &tab, panel, &cmds, promote);
             let n = shown.len().max(1);
@@ -513,6 +518,10 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     if feature_workspace { Rect::from_center_size(pos2(br.center().x, br.top() + 20.0), vec2(26.0, 26.0)) } else { br.shrink(6.0) };
                 icons::paint(&painter, icon_rect, icon, ink, fill, acc);
                 let label = match c.id {
+                    "sketch.finish" if feature_workspace => "Exit Sketch",
+                    "sketch.rectangle.two_point" if feature_workspace => "Rectangle",
+                    "sketch.circle.center" if feature_workspace => "Circle",
+                    "sketch.dimension" if feature_workspace => "Dimension",
                     "parameters.change" if *panel == "CONFIGURE" => "Parameters",
                     "config.table" if *panel == "CONFIGURE" => "Configurations",
                     _ => c.label,
