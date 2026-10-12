@@ -451,6 +451,10 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         if feature_workspace && tab == "SKETCH" {
             // Keep the way out of sketch editing visible even in a narrow window.
             panel_lists.sort_by_key(|(panel, ..)| *panel != "FINISH SKETCH");
+        } else if feature_workspace && tab == "SOLID" {
+            // Part geometry and reference tools lead; assembly and configuration follow.
+            let order = ["CREATE", "MODIFY", "CONSTRUCT", "INSPECT", "ASSEMBLE", "CONFIGURE", "INSERT", "SELECT"];
+            panel_lists.sort_by_key(|(panel, ..)| order.iter().position(|p| p == panel).unwrap_or(order.len()));
         }
         for (panel, cmds, promote) in panel_lists {
             let panel: &&str = &panel;
