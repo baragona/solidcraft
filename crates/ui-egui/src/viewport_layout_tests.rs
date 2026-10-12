@@ -282,3 +282,39 @@ fn tiny_viewports_never_overlap_navigation_and_axis_view() {
         }
     }
 }
+
+#[test]
+fn feature_sketch_fit_leaves_default_dimensions_inside_viewport() {
+    let mut h = Harness::new();
+    h.call("ui.prefs", json!({"feature_workspace":true,"look_at_anim":false}));
+    h.app.run("sketch.create", json!({"plane":"XY"})).unwrap();
+    let rectangle = h.app.run("sketch.rectangle.two_point", json!({"p0":[0,0],"p1":[80,50]})).unwrap();
+    for (side, value) in [(0, 80.0), (1, 50.0)] {
+        h.app.run("sketch.dimension", json!({"entities":[rectangle["curves"][side]],"value":value})).unwrap();
+    }
+    h.call("ui.view", json!({"view":"top"}));
+    h.settle();
+    let before = h.app.session.doc.to_json();
+    for (width, height) in [(1477.0, 944.0), (1000.0, 700.0)] {
+        h.call("ui.resize", json!({"width":width,"height":height}));
+        h.settle();
+        h.app.fit_view();
+        h.settle();
+        let layout = h.app.viewport.layout.as_ref().unwrap();
+        let projection = crate::viewport::projection(&h.app, layout.viewport);
+        for point in [Vec3::ZERO, Vec3::new(80.0, 50.0, 0.0)] {
+            let p = projection.to_screen(point).unwrap();
+            assert!(layout.drawable.shrink(40.0).contains(p), "{p:?} outside annotation gutter {layout:?}");
+        }
+        let texts = crate::dim_view::text_rects();
+        assert_eq!(texts.len(), 2);
+        for (_, text) in texts {
+            assert!(layout.drawable.contains_rect(text), "dimension {text:?} outside {layout:?}");
+        }
+        let fitted = h.app.cam;
+        h.app.fit_view();
+        h.settle();
+        assert_eq!(h.app.cam, fitted);
+    }
+    assert_eq!(h.app.session.doc.to_json(), before);
+}

@@ -782,7 +782,14 @@ impl SolveApp {
 
     fn fitted_bounds(&self, mut cam: Camera, bounds: &solvecraft_engine::geom::Aabb3) -> Camera {
         if let Some(layout) = &self.viewport.layout {
-            return viewport_layout::fit_bounds(cam, bounds, layout, self.ui.perspective).unwrap_or(cam);
+            let mut layout = layout.clone();
+            if self.session.active_sketch.is_some() {
+                // Dimensions use screen-sized offsets and text. Geometry alone can fit
+                // while its labels are clipped; keep a logical-point gutter for them.
+                let gutter = 56.0_f32.min(layout.drawable.width() * 0.15).min(layout.drawable.height() * 0.15);
+                layout.drawable = layout.drawable.shrink(gutter);
+            }
+            return viewport_layout::fit_bounds(cam, bounds, &layout, self.ui.perspective).unwrap_or(cam);
         }
         let previous = cam;
         cam.fit(bounds);

@@ -2289,7 +2289,12 @@ pub fn look_at_sketch(app: &mut SolveApp) {
             to.yaw = if ss.plane.normal().z > 0.0 { (-x.y).atan2(x.x) } else { x.y.atan2(x.x) };
         }
         to.target = ss.plane.origin;
-        app.animate_to(to);
+        if app.preferences.feature_workspace && ss.sketch.bounds().is_some() {
+            // Resolve after the left sketch pane has taken its final width.
+            app.pending_fit = Some((to, solvecraft_engine::view::bounds(&app.session), true));
+        } else {
+            app.animate_to(to);
+        }
     }
 }
 

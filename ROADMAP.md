@@ -12,7 +12,8 @@ sit above the model and an arrow triad at its lower left. Feature rows support e
 suppression, renaming and deletion through existing commands. Mac trackpad navigation supports
 two-finger pan, Option-scroll orbit and pinch zoom. View shortcuts include F, Space, Z/Shift+Z
 and Ctrl/Cmd+1–8. The Sketch toolbar prioritizes dimensions, basic shapes, trim and offset,
-with Exit Sketch first so it remains visible in narrow windows. Operation-specific boss/cut workflows remain to be refined.
+with Exit Sketch first so it remains visible in narrow windows. Existing sketches open framed
+within the left-pane layout, and sketch Fit reserves space for default dimension annotations. Operation-specific boss/cut workflows remain to be refined.
 
 ## At a glance
 
