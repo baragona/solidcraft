@@ -67,8 +67,12 @@ pub fn palette_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 ui.label(RichText::new("›").strong().color(t.accent));
                 let r = ui.add(
                     egui::TextEdit::singleline(&mut app.palette.text)
-                        .hint_text("Type a command, e.g. Extrude {\"distance\": 20}  — or press S to search")
-                        .desired_width(520.0),
+                        .hint_text(if app.preferences.feature_workspace {
+                            "Search commands…"
+                        } else {
+                            "Type a command, e.g. Extrude {\"distance\": 20}  — or press S to search"
+                        })
+                        .desired_width(if app.preferences.feature_workspace { 220.0 } else { 520.0 }),
                 );
                 if app.palette.focus {
                     r.request_focus();
@@ -78,7 +82,16 @@ pub fn palette_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     let line = std::mem::take(&mut app.palette.text);
                     submit(app, &line);
                 }
-                if let Some(last) = app.session.log.last() {
+                if app.preferences.feature_workspace {
+                    ui.label(
+                        RichText::new(if app.session.active_sketch.is_some() { "Editing Sketch" } else { "Editing Part" })
+                            .size(11.5)
+                            .color(t.text_dim),
+                    );
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(RichText::new(&app.session.doc.units).size(11.5).color(t.text_dim));
+                    });
+                } else if let Some(last) = app.session.log.last() {
                     ui.label(RichText::new(last).size(11.5).color(t.text_dim));
                 }
             });

@@ -70,74 +70,181 @@ fn delete_feature(app: &mut SolveApp, id: u64) {
     }
 }
 
-/// Feature history in the left manager pane. Actions use the same engine commands as the timeline.
+/// The profile sketch shown beneath a solid feature in the feature workspace.
+fn profile_sketch(kind: &FeatureKind) -> Option<u64> {
+    match kind {
+        FeatureKind::Extrude { sketch, .. } | FeatureKind::Revolve { sketch, .. } | FeatureKind::Sweep { sketch, .. } => Some(*sketch),
+        _ => None,
+    }
+}
+
+/// Feature history in the left manager pane. Sketches are nested beneath their first consumer.
 pub fn feature_tree(app: &mut SolveApp, ui: &mut egui::Ui) {
-    let features: Vec<_> = app.session.doc.features.iter().map(|f| (f.id, f.name.clone(), f.suppressed, f.kind.clone())).collect();
+    let features = app.session.doc.features.clone();
     let marker = app.session.doc.marker.unwrap_or(features.len());
-    for (index, (id, name, suppressed, kind)) in features.iter().enumerate() {
-        if index == marker {
-            ui.separator();
-            ui.label("Rollback position");
+    let mut owners = std::collections::BTreeMap::new();
+    for (index, feature) in features.iter().enumerate().take(marker) {
+        if let Some(sketch) = profile_sketch(&feature.kind) {
+            owners.entry(sketch).or_insert(index);
         }
-        let selected = app.session.selection.iter().any(|s| matches!(s, solvecraft_engine::Sel::Feature { id: selected } if selected == id));
-        let error = app.session.model.result(*id).and_then(|r| r.error.clone());
-        let label = if error.is_some() {
-            format!("! {name}")
-        } else if *suppressed || index >= marker {
-            format!("{name} (inactive)")
-        } else {
-            name.clone()
-        };
-        let response = ui
+    }
+    let mut nested = std::collections::BTreeMap::<usize, Vec<_>>::new();
+    for feature in &features {
+        if let Some(owner) = owners.get(&feature.id) {
+            nested.entry(*owner).or_default().push(feature);
+        }
+    }
+    let mut slots = Vec::new();
+    for (index, feature) in features.iter().enumerate() {
+        if owners.contains_key(&feature.id) {
+            continue;
+        }
+        let top = ui.cursor().top();
+        slots.push((index, top));
+        if index == marker {
+            rollback_bar(app, ui);
+        }
+        let children = nested.get(&index).cloned().unwrap_or_default();
+        let key = format!("feature_children:{}", feature.id);
+        let open = app.tree.expanded.contains(&key);
+        let row = ui
             .horizontal(|ui| {
-                let (rect, _) = ui.allocate_exact_size(vec2(18.0, 20.0), Sense::hover());
-                let t = Tokens::get();
-                icons::paint(ui.painter(), rect.shrink(2.0), icon_of(kind), t.icon, t.icon_fill, t.accent);
-                ui.push_id(("feature_tree", id), |ui| ui.selectable_label(selected, label)).inner
+                let (fold_rect, fold) = ui.allocate_exact_size(vec2(16.0, 20.0), Sense::click());
+                if !children.is_empty() {
+                    let c = fold_rect.center();
+                    let points = if open {
+                        vec![c + vec2(-4.0, -2.0), c + vec2(4.0, -2.0), c + vec2(0.0, 3.0)]
+                    } else {
+                        vec![c + vec2(-2.0, -4.0), c + vec2(3.0, 0.0), c + vec2(-2.0, 4.0)]
+                    };
+                    ui.painter().add(egui::Shape::convex_polygon(points, Tokens::get().text_dim, Stroke::NONE));
+                    crate::scenario::publish_handle(&format!("feature-fold:{}", feature.id), fold.rect.center());
+                    if fold.clicked() {
+                        if open {
+                            app.tree.expanded.remove(&key);
+                        } else {
+                            app.tree.expanded.insert(key.clone());
+                        }
+                    }
+                }
+                feature_tree_row(app, ui, feature, index >= marker)
             })
             .inner;
-        crate::scenario::publish_handle(&format!("feature:{name}"), response.rect.center());
-        if response.clicked() {
-            let _ = app.run("select.set", json!({"items": [{"type":"feature", "id":id}]}));
+        if open {
+            ui.indent(("absorbed", feature.id), |ui| {
+                for child in children {
+                    ui.horizontal(|ui| {
+                        feature_tree_row(app, ui, child, false);
+                    });
+                }
+            });
         }
-        if response.double_clicked() {
-            app.edit_feature(*id);
-        }
-        response.context_menu(|ui| {
-            if ui.button("Edit Feature").clicked() {
-                app.edit_feature(*id);
-                ui.close();
-            }
-            if let FeatureKind::Extrude { sketch, .. } | FeatureKind::Revolve { sketch, .. } | FeatureKind::Sweep { sketch, .. } = kind
-                && ui.button("Edit Sketch").clicked()
-            {
-                app.edit_sketch(*sketch);
-                ui.close();
-            }
-            if ui.button(if *suppressed { "Unsuppress" } else { "Suppress" }).clicked() {
-                let _ = app.run("timeline.suppress", json!({"feature":id}));
-                ui.close();
-            }
-            if ui.button("Roll Back Here").clicked() {
-                let _ = app.run("timeline.roll_to", json!({"feature":id}));
-                ui.close();
-            }
-            if ui.button("Rename").clicked() {
-                app.dialog = Some(crate::dialogs::Dialog::rename(*id, name));
-                ui.close();
-            }
-            if ui.button("Delete").clicked() {
-                delete_feature(app, *id);
-                ui.close();
-            }
-        });
-        if let Some(error) = error {
-            ui.colored_label(crate::theme::Tokens::get().error, error);
+        if row.hovered() {
+            app.viewport.hover_bodies =
+                app.session.world_state().bodies.iter().filter(|body| body.feature == feature.id).map(|body| body.name.clone()).collect();
         }
     }
-    if marker < features.len() && ui.button("Roll Forward to End").clicked() {
-        let _ = app.run("timeline.roll_to", json!({}));
+    slots.push((features.len(), ui.cursor().top()));
+    if marker >= features.len() {
+        rollback_bar(app, ui);
     }
+    let drag_id = egui::Id::new("feature_rollback_drag");
+    if ui.ctx().data(|d| d.get_temp::<bool>(drag_id)).unwrap_or(false) {
+        if let Some(pointer) = ui.input(|i| i.pointer.latest_pos()) {
+            let target = slots.iter().min_by(|a, b| (a.1 - pointer.y).abs().total_cmp(&(b.1 - pointer.y).abs()));
+            if let Some((index, y)) = target {
+                ui.painter().hline(ui.max_rect().x_range(), *y, Stroke::new(2.0, Tokens::get().accent));
+                if ui.input(|i| i.pointer.any_released()) {
+                    let params = if *index >= features.len() { json!({}) } else { json!({"position":index}) };
+                    let _ = app.run("timeline.roll_to", params);
+                }
+            }
+        }
+        if !ui.input(|i| i.pointer.primary_down()) {
+            ui.ctx().data_mut(|d| d.remove::<bool>(drag_id));
+        }
+    }
+}
+
+fn rollback_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), 12.0), Sense::click_and_drag());
+    ui.painter().hline(rect.x_range(), rect.center().y, Stroke::new(3.0, Tokens::get().accent));
+    crate::scenario::publish_handle("feature:rollback", rect.center());
+    if response.drag_started() {
+        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("feature_rollback_drag"), true));
+    }
+    response.on_hover_text("Drag to roll the model back or forward").context_menu(|ui| {
+        if ui.button("Roll Forward to End").clicked() {
+            let _ = app.run("timeline.roll_to", json!({}));
+            ui.close();
+        }
+        if ui.button("Roll Back to Start").clicked() {
+            let _ = app.run("timeline.roll_to", json!({"position":0}));
+            ui.close();
+        }
+    });
+}
+
+fn feature_tree_row(app: &mut SolveApp, ui: &mut egui::Ui, feature: &solvecraft_engine::doc::Feature, rolled: bool) -> egui::Response {
+    let id = feature.id;
+    let selected = app.session.selection.iter().any(|s| matches!(s, solvecraft_engine::Sel::Feature { id: selected } if *selected == id));
+    let error = app.session.model.result(id).and_then(|r| r.error.clone());
+    let t = Tokens::get();
+    let ink = if error.is_some() {
+        t.error
+    } else if rolled || feature.suppressed {
+        t.text_dim
+    } else {
+        t.text
+    };
+    let (rect, _) = ui.allocate_exact_size(vec2(18.0, 20.0), Sense::hover());
+    icons::paint(ui.painter(), rect.shrink(2.0), icon_of(&feature.kind), ink, t.icon_fill, t.accent);
+    let response = ui.push_id(("feature_tree", id), |ui| ui.selectable_label(selected, egui::RichText::new(&feature.name).color(ink))).inner;
+    crate::scenario::publish_handle(&format!("feature:{}", feature.name), response.rect.center());
+    crate::scenario::publish_handle(&format!("feature-id:{id}"), response.rect.center());
+    if response.clicked() {
+        let _ = app.run("select.set", json!({"items": [{"type":"feature", "id":id}]}));
+    }
+    if response.double_clicked() {
+        app.edit_feature(id);
+    }
+    response.context_menu(|ui| {
+        if ui.button("Edit Feature").clicked() {
+            app.edit_feature(id);
+            ui.close();
+        }
+        if let Some(sketch) = profile_sketch(&feature.kind)
+            && ui.button("Edit Sketch").clicked()
+        {
+            app.edit_sketch(sketch);
+            ui.close();
+        }
+        if matches!(feature.kind, FeatureKind::Sketch { .. }) && ui.button("Show / Hide Sketch").clicked() {
+            let visible = crate::browser::sketch_visible(app, id);
+            let _ = app.run("browser.visibility", json!({"items":[id],"visible":!visible}));
+            ui.close();
+        }
+        if ui.button(if feature.suppressed { "Unsuppress" } else { "Suppress" }).clicked() {
+            let _ = app.run("timeline.suppress", json!({"feature":id}));
+            ui.close();
+        }
+        if ui.button("Roll Back Here").clicked() {
+            let _ = app.run("timeline.roll_to", json!({"feature":id}));
+            ui.close();
+        }
+        if ui.button("Rename").clicked() {
+            app.dialog = Some(crate::dialogs::Dialog::rename(id, &feature.name));
+            ui.close();
+        }
+        if ui.button("Delete").clicked() {
+            delete_feature(app, id);
+            ui.close();
+        }
+    });
+    if let Some(error) = error {
+        response.clone().on_hover_text(error);
+    }
+    response
 }
 
 pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {

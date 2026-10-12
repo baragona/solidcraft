@@ -300,7 +300,7 @@ pub fn control(app: &mut SolveApp, p: &Value) -> Value {
 /// The document tabs in the application bar, from `x0` to `x1`: click to switch, × to close,
 /// + for a new design.
 pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
-    let t = Tokens::get();
+    let t = Tokens::get().workspace_header(app.preferences.feature_workspace);
     let home = Rect::from_min_size(pos2(x0, r.top() + 5.0), vec2(66.0, r.height() - 5.0));
     let response = ui.interact(home, ui.id().with("home_tab"), Sense::click());
     ui.painter().rect_filled(

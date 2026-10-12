@@ -119,6 +119,15 @@ pub struct Tokens {
 }
 
 impl Tokens {
+    /// Light application chrome for the feature-oriented workspace.
+    pub fn workspace_header(mut self, feature_workspace: bool) -> Self {
+        if feature_workspace {
+            self.app_bar = self.panel_header;
+            self.app_bar_text = self.text;
+        }
+        self
+    }
+
     /// The tokens of the current theme.
     pub fn get() -> Tokens {
         if is_dark() { Tokens::dark() } else { Tokens::light() }

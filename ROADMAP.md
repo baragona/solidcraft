@@ -5,11 +5,13 @@ features → parametric timeline) as an open, pure-Rust, agent-drivable applicat
 
 ## Feature-oriented workspace (in progress)
 
-An optional feature workspace provides labeled tools, tabs below the toolbar, left-side
-feature history and command properties. Feature rows support editing, suppression, renaming,
-deletion and rollback through the existing command system. Mac trackpad navigation supports
-two-finger pan, Option-scroll orbit and pinch zoom. SolidWorks-style feature/sketch organization,
-shortcuts and operation-specific workflows are still being refined.
+An optional feature workspace provides light application chrome, a traditional menu row,
+labeled tools with tabs below, nested profile sketches and a draggable rollback bar in the
+left feature tree. Full-height feature and sketch property panes sit on the left; view controls
+sit above the model and an arrow triad at its lower left. Feature rows support editing,
+suppression, renaming and deletion through existing commands. Mac trackpad navigation supports
+two-finger pan, Option-scroll orbit and pinch zoom. View shortcuts include F, Space, Z/Shift+Z
+and Ctrl/Cmd+1–8. Operation-specific boss/cut workflows remain to be refined.
 
 ## At a glance
 

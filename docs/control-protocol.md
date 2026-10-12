@@ -110,3 +110,11 @@ The left feature history supports selection, double-click editing, and context-m
 suppress, rename, delete and rollback actions. Command properties occupy the left pane.
 Trackpad gestures over the model: two-finger scroll pans, Option + scroll orbits, pinch zooms,
 and Shift + scroll zooms. Gestures over panels remain available for scrolling those panels.
+
+In this workspace, profile sketches nest beneath their first consuming feature; expand its
+arrow to edit the sketch. Drag the blue rollback bar to inspect earlier feature states.
+Feature and sketch property panels use the left side, with view controls above the model.
+F fits the model, Space opens View Orientation, Z/Shift+Z zoom out/in, Ctrl (or Cmd) + 1–7
+select Front/Back/Left/Right/Top/Bottom/Isometric, and Ctrl/Cmd+8 looks normal to the selection
+or active sketch. These shortcuts take precedence over conflicting command bindings while
+this workspace is enabled.

@@ -44,7 +44,7 @@ fn report_rect(bar: Rect, captions: f32, tabs_start: f32) -> (Rect, bool) {
 }
 
 pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
-    let t = Tokens::get();
+    let t = Tokens::get().workspace_header(app.preferences.feature_workspace);
     egui::Panel::top("sc_appbar").exact_size(34.0).show_separator_line(false).frame(egui::Frame::NONE.fill(t.app_bar)).show(ui, |ui| {
         let r = ui.max_rect();
         // The bar is the window's title bar: its empty space moves the window.
@@ -113,14 +113,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
             if resp.hovered() {
                 ui.painter().rect_filled(br, 4.0, Color32::from_white_alpha(30));
             }
-            icons::paint(
-                ui.painter(),
-                br.shrink(5.0),
-                icon,
-                Color32::from_rgb(225, 230, 238),
-                Color32::from_rgb(120, 140, 170),
-                Color32::from_rgb(120, 190, 255),
-            );
+            icons::paint(ui.painter(), br.shrink(5.0), icon, t.app_bar_text, t.icon_fill, t.accent);
             resp.on_hover_text(tip).clicked()
         };
         let file = click(ui, "folder", app.tr("ui.file"));
@@ -364,29 +357,42 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         let tabs_y = if feature_workspace { r.bottom() - 24.0 } else { r.top() + 2.0 };
         // The workspace switcher spans the toolbar's height (the tab row and the panel row).
         let ws = Rect::from_min_max(pos2(r.left() + 6.0, r.top() + 4.0), pos2(r.left() + 104.0, r.bottom() - 5.0));
-        let wresp = ui.interact(ws, ui.id().with("workspace_switcher"), Sense::click());
-        painter.rect(ws, 4.0, if wresp.hovered() { t.hover } else { t.field }, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
-        icons::paint(&painter, Rect::from_center_size(pos2(ws.center().x, ws.top() + 24.0), vec2(26.0, 26.0)), "box", t.icon, t.icon_fill, t.accent);
-        painter.text(
-            pos2(ws.center().x - 5.0, ws.top() + 52.0),
-            Align2::CENTER_CENTER,
-            app.tr_label(crate::toolbar_custom::WORKSPACE),
-            FontId::proportional(12.0),
-            t.text,
-        );
-        caret(&painter, pos2(ws.center().x + 27.0, ws.top() + 52.0), t.text);
-        painter.text(pos2(ws.center().x, ws.top() + 69.0), Align2::CENTER_CENTER, app.tr("ui.workspace"), FontId::proportional(10.0), t.text_dim);
-        if wresp.on_hover_text(app.tr("ui.change_workspace")).clicked() {
-            crate::context_menu::open_for(app, ws.left_bottom(), crate::context_menu::Target::Workspace);
+        if !feature_workspace {
+            let wresp = ui.interact(ws, ui.id().with("workspace_switcher"), Sense::click());
+            painter.rect(ws, 4.0, if wresp.hovered() { t.hover } else { t.field }, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+            icons::paint(
+                &painter,
+                Rect::from_center_size(pos2(ws.center().x, ws.top() + 24.0), vec2(26.0, 26.0)),
+                "box",
+                t.icon,
+                t.icon_fill,
+                t.accent,
+            );
+            painter.text(
+                pos2(ws.center().x - 5.0, ws.top() + 52.0),
+                Align2::CENTER_CENTER,
+                app.tr_label(crate::toolbar_custom::WORKSPACE),
+                FontId::proportional(12.0),
+                t.text,
+            );
+            caret(&painter, pos2(ws.center().x + 27.0, ws.top() + 52.0), t.text);
+            painter.text(pos2(ws.center().x, ws.top() + 69.0), Align2::CENTER_CENTER, app.tr("ui.workspace"), FontId::proportional(10.0), t.text_dim);
+            if wresp.on_hover_text(app.tr("ui.change_workspace")).clicked() {
+                crate::context_menu::open_for(app, ws.left_bottom(), crate::context_menu::Target::Workspace);
+            }
+            crate::scenario::publish_rect("toolbar", r);
+            crate::scenario::publish_rect("workspace_switcher", ws);
         }
-        crate::scenario::publish_rect("toolbar", r);
-        crate::scenario::publish_rect("workspace_switcher", ws);
-        let mut x = r.left() + 112.0;
+        let mut x = r.left() + if feature_workspace { 8.0 } else { 112.0 };
         let mut tabs: Vec<&str> = Vec::new();
         if sketching || feature_workspace {
             tabs.push("SKETCH");
         }
         tabs.extend(TABS.iter());
+        if feature_workspace {
+            tabs.retain(|tab| *tab != "SKETCH");
+            tabs.insert(1, "SKETCH");
+        }
         for tab in tabs {
             let display_tab = if feature_workspace {
                 match tab {
@@ -435,7 +441,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             (None, Some(_)) => app.last_command.as_ref().map(|(id, _)| id.clone()),
             _ => None,
         };
-        let mut px = r.left() + 112.0;
+        let mut px = r.left() + if feature_workspace { 8.0 } else { 112.0 };
         let top = r.top() + if feature_workspace { 2.0 } else { 26.0 };
         let button_step = if feature_workspace { 72.0 } else { 40.0 };
         let mut drop: Option<(&'static str, &'static str, Option<&'static str>)> = None;
@@ -524,7 +530,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled() && info.enabled, tr_label));
                 let tip = match &info.disabled_reason {
                     Some(why) => format!("{}\n{why}", tr_label),
-                    None => format!("{}{}", tr_label, c.shortcut.map(|k| format!("  ({k})")).unwrap_or_default()),
+                    None => format!("{}{}", tr_label, crate::keymap::effective(app, c.id).map(|k| format!("  ({k})")).unwrap_or_default()),
                 };
                 if resp.on_hover_text(tip).clicked() && info.enabled {
                     let id = c.id;
@@ -689,7 +695,52 @@ pub fn shortcuts(app: &mut SolveApp, ctx: &egui::Context) {
     });
     for k in keys {
         use egui::Key;
-        if mods.command {
+        if app.preferences.feature_workspace && !mods.alt {
+            if mods.command || mods.ctrl {
+                let view = match k {
+                    Key::Num1 => Some("front"),
+                    Key::Num2 => Some("back"),
+                    Key::Num3 => Some("left"),
+                    Key::Num4 => Some("right"),
+                    Key::Num5 => Some("top"),
+                    Key::Num6 => Some("bottom"),
+                    Key::Num7 => Some("iso"),
+                    _ => None,
+                };
+                if !mods.shift {
+                    if let Some(view) = view {
+                        app.animate_view(view);
+                        continue;
+                    }
+                    if k == Key::Num8 {
+                        crate::viewport::look_at_selection(app);
+                        continue;
+                    }
+                }
+            } else {
+                match k {
+                    Key::F if !mods.shift => {
+                        app.animate_view("fit");
+                        continue;
+                    }
+                    Key::Z => {
+                        app.cancel_view_animation();
+                        app.cam.zoom_at(if mods.shift { 0.8 } else { 1.25 }, None);
+                        continue;
+                    }
+                    Key::Space => {
+                        let id = egui::Id::new("feature_view_orientation");
+                        ctx.data_mut(|d| {
+                            let open = d.get_temp::<bool>(id).unwrap_or(false);
+                            d.insert_temp(id, !open);
+                        });
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if mods.command || (app.preferences.feature_workspace && mods.ctrl) {
             match k {
                 Key::Z => drop(app.run("edit.undo", json!({}))),
                 Key::Y => drop(app.run("edit.redo", json!({}))),
@@ -741,6 +792,160 @@ pub fn shortcuts(app: &mut SolveApp, ctx: &egui::Context) {
             }
         }
     }
+}
+
+/// Standard views available from Space in the feature workspace.
+pub fn orientation_window(app: &mut SolveApp, ctx: &egui::Context) {
+    let id = egui::Id::new("feature_view_orientation");
+    let mut open = ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false);
+    if !open {
+        return;
+    }
+    let mut chosen = None;
+    crate::frame::window(ctx, "View Orientation", crate::frame::Width::Normal).open(&mut open).show(ctx, |ui| {
+        for (label, view, key) in [
+            ("Front", "front", "1"),
+            ("Back", "back", "2"),
+            ("Left", "left", "3"),
+            ("Right", "right", "4"),
+            ("Top", "top", "5"),
+            ("Bottom", "bottom", "6"),
+            ("Isometric", "iso", "7"),
+        ] {
+            if ui.button(format!("{label}    Ctrl+{key}")).clicked() {
+                chosen = Some(view);
+            }
+        }
+        if ui.button("Normal To    Ctrl+8").clicked() {
+            chosen = Some("normal");
+        }
+        ui.separator();
+        if ui.button("Zoom to Fit    F").clicked() {
+            chosen = Some("fit");
+        }
+    });
+    if let Some(view) = chosen {
+        if view == "normal" {
+            crate::viewport::look_at_selection(app);
+        } else {
+            app.animate_view(view);
+        }
+        open = false;
+    }
+    ctx.data_mut(|d| d.insert_temp(id, open));
+}
+
+/// Traditional menu row for the feature workspace, sharing the existing commands and dialogs.
+pub fn workspace_menus(app: &mut SolveApp, ui: &mut egui::Ui) {
+    if !app.preferences.feature_workspace || app.home.open {
+        return;
+    }
+    let t = Tokens::get();
+    egui::Panel::top("feature_menus").exact_size(24.0).frame(egui::Frame::NONE.fill(t.toolbar).inner_margin(egui::Margin::symmetric(8, 0))).show(
+        ui,
+        |ui| {
+            ui.horizontal(|ui| {
+                ui.menu_button("File", |ui| {
+                    if ui.button("New").clicked() {
+                        crate::documents::new_design(app);
+                        ui.close();
+                    }
+                    if ui.button("Open…").clicked() {
+                        if let Some(path) = app.services.pick_open.as_ref().and_then(|f| f()) {
+                            app.open_path_async(&path);
+                        }
+                        ui.close();
+                    }
+                    if ui.button("Save").clicked() {
+                        save(app);
+                        ui.close();
+                    }
+                    ui.separator();
+                    if ui.button("Export STEP…").clicked() {
+                        export(app, "step");
+                        ui.close();
+                    }
+                    if ui.button("Export STL…").clicked() {
+                        export(app, "stl");
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Edit", |ui| {
+                    if ui.button("Undo").clicked() {
+                        let _ = app.run("edit.undo", json!({}));
+                        ui.close();
+                    }
+                    if ui.button("Redo").clicked() {
+                        let _ = app.run("edit.redo", json!({}));
+                        ui.close();
+                    }
+                    if ui.button("Delete").clicked() {
+                        crate::viewport::delete_selection(app);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("View", |ui| {
+                    if ui.button("View Orientation    Space").clicked() {
+                        ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("feature_view_orientation"), true));
+                        ui.close();
+                    }
+                    if ui.button("Zoom to Fit    F").clicked() {
+                        app.animate_view("fit");
+                        ui.close();
+                    }
+                    if ui.button("Normal To    Ctrl+8").clicked() {
+                        crate::viewport::look_at_selection(app);
+                        ui.close();
+                    }
+                    ui.separator();
+                    ui.checkbox(&mut app.ui.show_browser, "Feature Tree");
+                    ui.checkbox(&mut app.ui.show_grid, "Grid");
+                    ui.checkbox(&mut app.ui.show_origin, "Origin");
+                    ui.checkbox(&mut app.ui.perspective, "Perspective");
+                });
+                ui.menu_button("Insert", |ui| {
+                    for panel in ["CREATE", "MODIFY", "CONSTRUCT", "ASSEMBLE"] {
+                        ui.menu_button(
+                            match panel {
+                                "CREATE" => "Features",
+                                "MODIFY" => "Modify",
+                                "CONSTRUCT" => "Reference Geometry",
+                                _ => "Assembly",
+                            },
+                            |ui| {
+                                for c in solvecraft_engine::command_specs().into_iter().filter(|c| c.tab == "SOLID" && c.panel == panel) {
+                                    if ui.add_enabled(c.info(&app.session).enabled, egui::Button::new(c.label)).clicked() {
+                                        app.start(c.id);
+                                        ui.close();
+                                    }
+                                }
+                            },
+                        );
+                    }
+                });
+                ui.menu_button("Tools", |ui| {
+                    if ui.button("Parameters…").clicked() {
+                        app.start("parameters.change");
+                        ui.close();
+                    }
+                    if ui.button("Options…").clicked() {
+                        crate::prefs::open_at(app, 0);
+                        ui.close();
+                    }
+                });
+                ui.menu_button("Help", |ui| {
+                    if ui.button("Keyboard Shortcuts").clicked() {
+                        crate::prefs::open_at(app, crate::prefs::PAGE_SHORTCUTS);
+                        ui.close();
+                    }
+                    if ui.button("About SolidCraft").clicked() {
+                        crate::help::run(app, &ui.ctx().clone(), "about");
+                        ui.close();
+                    }
+                });
+            });
+        },
+    );
 }
 
 #[cfg(test)]

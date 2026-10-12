@@ -1286,8 +1286,12 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let frame = egui::Frame::window(&ctx.global_style())
         .fill(t.dialog_bg)
         .stroke(Stroke::new(1.0, t.dialog_border))
-        .corner_radius(egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 })
-        .shadow(egui::Shadow { offset: [-2, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(40) });
+        .corner_radius(if app.preferences.feature_workspace { egui::CornerRadius::ZERO } else { egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 } })
+        .shadow(if app.preferences.feature_workspace {
+            egui::Shadow::NONE
+        } else {
+            egui::Shadow { offset: [-2, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(40) }
+        });
     // The area includes the border as well as the inner margins; reserve all of it so a
     // horizontally scrolling table cannot push a wide dialog two pixels past its limit.
     let horizontal_frame = frame.inner_margin.leftf() + frame.inner_margin.rightf() + 2.0 * frame.stroke.width;
@@ -1300,7 +1304,14 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         RichText::new(heading.clone()).strong().size(13.0),
         egui::Id::new(("sc_dialog", title(&d.kind))),
         anchor,
-        vp.bottom() - anchor.y - 8.0,
+        vp.bottom()
+            - anchor.y
+            - 8.0
+            - if app.preferences.feature_workspace {
+                frame.inner_margin.topf() + frame.inner_margin.bottomf() + 2.0 * frame.stroke.width
+            } else {
+                0.0
+            },
         width,
     )
     .pivot(if app.preferences.feature_workspace { egui::Align2::LEFT_TOP } else { egui::Align2::RIGHT_TOP })
@@ -1311,7 +1322,13 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         // Long texts (errors, notes) wrap instead of widening the dialog.
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
         let margin = horizontal_frame;
-        let min_w = if wide { 480.0 } else { DIALOG_MIN_W } - margin;
+        let min_w = if wide {
+            480.0
+        } else if app.preferences.feature_workspace {
+            DIALOG_MAX_W
+        } else {
+            DIALOG_MIN_W
+        } - margin;
         ui.set_min_width(min_w);
         ui.set_max_width(if wide { DIALOG_WIDE_MAX_W } else { DIALOG_MAX_W } - margin);
         // Rows that end at the right edge line up with last frame's content width.
@@ -1331,6 +1348,21 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         });
         if d.collapsed {
             return;
+        }
+        if app.preferences.feature_workspace {
+            ui.horizontal(|ui| {
+                if has_ok {
+                    let accept = ui.add_enabled(valid, egui::Button::new(RichText::new("✓").size(22.0).color(t.sketch_accent)).frame(false));
+                    crate::scenario::publish_handle("dialog:OK", accept.rect.center());
+                    if accept.on_hover_text("Accept feature").clicked() {
+                        ok = true;
+                    }
+                }
+                if ui.add(egui::Button::new(RichText::new("×").size(22.0).color(t.error)).frame(false)).on_hover_text("Cancel").clicked() {
+                    cancel = true;
+                }
+            });
+            ui.separator();
         }
         ui.add_space(2.0);
         // A sizing pass initially offers almost no height to an auto-sized window.
@@ -1957,24 +1989,29 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             };
             let (ok_width, close_width) = (button_width(label), button_width(close));
             let buttons = close_width + if has_ok { ok_width + ui.spacing().item_spacing.x } else { 0.0 };
-            crate::frame::right_aligned(ui, total, buttons, |ui| {
-                if has_ok {
-                    let b = egui::Button::new(RichText::new(label).color(if valid { Color32::WHITE } else { t.text_dim }))
-                        .fill(if valid { t.accent } else { Color32::TRANSPARENT })
-                        .wrap_mode(egui::TextWrapMode::Extend)
-                        .min_size(vec2(ok_width, 24.0));
-                    let r = ui.add_enabled(valid, b);
-                    crate::scenario::publish_handle(&format!("dialog:{raw_label}"), r.rect.center());
-                    if r.clicked() {
-                        ok = true;
+            if !app.preferences.feature_workspace {
+                crate::frame::right_aligned(ui, total, buttons, |ui| {
+                    if has_ok {
+                        let b = egui::Button::new(RichText::new(label).color(if valid { Color32::WHITE } else { t.text_dim }))
+                            .fill(if valid { t.accent } else { Color32::TRANSPARENT })
+                            .wrap_mode(egui::TextWrapMode::Extend)
+                            .min_size(vec2(ok_width, 24.0));
+                        let r = ui.add_enabled(valid, b);
+                        crate::scenario::publish_handle(&format!("dialog:{raw_label}"), r.rect.center());
+                        if r.clicked() {
+                            ok = true;
+                        }
                     }
-                }
-                if ui.add(egui::Button::new(close).wrap_mode(egui::TextWrapMode::Extend).min_size(vec2(close_width, 24.0))).clicked() {
-                    cancel = true;
-                }
-            });
+                    if ui.add(egui::Button::new(close).wrap_mode(egui::TextWrapMode::Extend).min_size(vec2(close_width, 24.0))).clicked() {
+                        cancel = true;
+                    }
+                });
+            }
         });
         crate::frame::remember_width(ui, wkey);
+        if app.preferences.feature_workspace {
+            ui.set_min_height((vp.bottom() - 8.0 - frame.inner_margin.bottomf() - frame.stroke.width - ui.cursor().top()).max(0.0));
+        }
     });
     app.viewport.dialog_rect = response.map(|r| r.response.rect);
     // Keyboard: Enter applies (from a value field, or with nothing focused), Esc cancels.

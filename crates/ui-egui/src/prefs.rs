@@ -784,6 +784,59 @@ mod tests {
     use super::*;
 
     #[test]
+    fn feature_workspace_absorbs_sketches_and_keeps_view_controls_clear() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.preferences.feature_workspace = true;
+        h.app.run("sketch.create", json!({"plane":"XY","name":"Profile"})).unwrap();
+        h.app.run("sketch.rectangle.two_point", json!({"p0":[0,0],"p1":[20,30]})).unwrap();
+        h.app.run("sketch.finish", json!({})).unwrap();
+        h.app.run("solid.extrude", json!({"distance":10,"name":"Boss"})).unwrap();
+        h.frames(3);
+        let id = h.app.session.doc.features.last().unwrap().id;
+        assert!(crate::scenario::handle_at("feature:Profile").is_none());
+        h.step(&json!({"click":{"handle":format!("feature-fold:{id}")}})).unwrap();
+        h.frames(3);
+        assert!(crate::scenario::handle_at("feature:Profile").is_some());
+        let layout = h.app.viewport.layout.as_ref().unwrap();
+        assert!(layout.navigation.center().y < layout.viewport.center().y);
+        assert!(layout.axis_view.center().y > layout.viewport.center().y);
+        assert!(layout.viewport.contains_rect(layout.axis_view));
+        assert!(!layout.axis_view.intersects(layout.navigation));
+        h.frames(40); // A new double-click gesture, separate from the preceding expand click.
+        h.step(&json!({"click":{"handle":"feature:Profile"},"double":true})).unwrap();
+        h.frames(3);
+        assert!(
+            h.app.session.active_sketch.is_some(),
+            "selection {:?}, dialog {:?}, log {:?}",
+            h.app.session.selection,
+            h.app.dialog,
+            h.app.session.log
+        );
+    }
+
+    #[test]
+    fn feature_workspace_shortcuts_do_not_start_fillet() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.preferences.feature_workspace = true;
+        h.app.preferences.look_at_anim = false;
+        h.app.run("solid.box", json!({"length":20,"width":30,"height":10})).unwrap();
+        h.frames(3);
+        h.call("ui.key", json!({"key":"F"}));
+        h.frames(3);
+        assert!(h.app.dialog.is_none());
+        assert!(crate::keymap::effective(&h.app, "solid.fillet").is_none());
+        h.call("ui.key", json!({"key":"1","cmd":true}));
+        h.frames(3);
+        let front = h.app.cam;
+        h.call("ui.key", json!({"key":"7","cmd":true}));
+        h.frames(3);
+        assert_ne!(h.app.cam.yaw, front.yaw);
+        h.call("ui.key", json!({"key":"Space"}));
+        h.frames(3);
+        assert!(h.widget("View Orientation").is_some());
+    }
+
+    #[test]
     fn feature_tree_opens_edit_panel_outside_the_model_view() {
         let mut h = crate::scenario::Harness::new();
         h.app.preferences.feature_workspace = true;
@@ -795,6 +848,7 @@ mod tests {
         assert!(h.app.dialog.is_some());
         let dialog = h.app.viewport.dialog_rect.unwrap();
         let viewport = h.app.viewport.rect.unwrap();
+        assert!(dialog.bottom() <= viewport.bottom(), "property pane must leave the status bar clear: {dialog:?}, {viewport:?}");
         assert!(dialog.right() <= viewport.left() + 1.0, "property pane {dialog:?} overlaps model {viewport:?}");
     }
 

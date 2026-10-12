@@ -980,12 +980,13 @@ impl SolveApp {
                 return;
             }
         }
+        toolbar::workspace_menus(self, ui);
         toolbar::toolbar(self, ui);
         if self.ui.show_timeline && !self.preferences.feature_workspace {
             timeline::timeline(self, ui);
         }
         palette::palette_bar(self, ui);
-        if self.ui.show_browser || (self.preferences.feature_workspace && self.dialog.is_some()) {
+        if self.ui.show_browser || (self.preferences.feature_workspace && (self.dialog.is_some() || self.session.active_sketch.is_some())) {
             browser::browser(self, ui);
         }
         preview::update(self, ui.ctx());
@@ -1006,6 +1007,7 @@ impl SolveApp {
         }
         shortcut_box::show(self, ui.ctx());
         prefs::show(self, ui.ctx());
+        toolbar::orientation_window(self, ui.ctx());
     }
 
     fn drain_control(&mut self, ctx: &egui::Context) {

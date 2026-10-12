@@ -182,12 +182,16 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     let bottom = vp.bottom().min(ctx.content_rect().bottom()) - 8.0;
     // Prefer the space below Axis View, but reclaim it on short/HiDPI views.
     let top = (vp.top() + crate::viewport::AXIS_VIEW_CLEARANCE).min((bottom - 360.0).max(vp.top()));
-    let anchor = egui::pos2(vp.right(), top);
+    let anchor = if app.preferences.feature_workspace { egui::pos2(ctx.content_rect().left(), vp.top()) } else { egui::pos2(vp.right(), top) };
     let frame = egui::Frame::window(&ctx.global_style())
         .fill(t.dialog_bg)
         .stroke(Stroke::new(1.0, t.dialog_border))
-        .corner_radius(egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 })
-        .shadow(egui::Shadow { offset: [-2, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(40) });
+        .corner_radius(if app.preferences.feature_workspace { egui::CornerRadius::ZERO } else { egui::CornerRadius { nw: 4, sw: 4, ne: 0, se: 0 } })
+        .shadow(if app.preferences.feature_workspace {
+            egui::Shadow::NONE
+        } else {
+            egui::Shadow { offset: [-2, 2], blur: 8, spread: 0, color: Color32::from_black_alpha(40) }
+        });
     let shown = |k: &str| match k {
         "grid" => !opts.hide_grid,
         "snap" => !opts.no_snap,
@@ -209,12 +213,23 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         app.tr("ui.heading_sketch_palette"),
         egui::Id::new("sc_sketch_palette"),
         anchor,
-        bottom - anchor.y,
+        bottom
+            - anchor.y
+            - if app.preferences.feature_workspace {
+                frame.inner_margin.topf() + frame.inner_margin.bottomf() + 2.0 * frame.stroke.width
+            } else {
+                0.0
+            },
         crate::frame::Width::Normal,
     )
+    .pivot(if app.preferences.feature_workspace { egui::Align2::LEFT_TOP } else { egui::Align2::RIGHT_TOP })
     .frame(frame)
     .show(ctx, |ui| {
-        let width = WIDTH.min((vp.width() * 0.46 - 16.0).max(120.0));
+        let width = if app.preferences.feature_workspace {
+            300.0 - frame.inner_margin.leftf() - frame.inner_margin.rightf() - 2.0 * frame.stroke.width
+        } else {
+            WIDTH.min((vp.width() * 0.46 - 16.0).max(120.0))
+        };
         ui.set_width(width);
         ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
         ui.horizontal(|ui| {
@@ -222,7 +237,11 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             if ui.add(egui::Button::new(RichText::new(if folded { "+" } else { "−" }).size(14.0)).frame(false)).clicked() {
                 FOLDED.with(|f| f.set(!folded));
             }
-            ui.label(RichText::new(app.tr("ui.heading_sketch_palette")).strong().size(12.5));
+            ui.label(
+                RichText::new(if app.preferences.feature_workspace { "Sketch Properties" } else { app.tr("ui.heading_sketch_palette") })
+                    .strong()
+                    .size(12.5),
+            );
         });
         if FOLDED.with(Cell::get) {
             return;
@@ -275,13 +294,21 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         ui.label(RichText::new(crate::i18n::tr_dyn(&dof_line)).color(if ok { t.sketch_accent } else { t.text_dim }));
         ui.add_space(4.0);
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            let button = ui.add(egui::Button::new(RichText::new(app.tr("ui.finish_sketch")).color(Color32::WHITE)).fill(t.accent));
+            let button = ui.add(
+                egui::Button::new(
+                    RichText::new(if app.preferences.feature_workspace { "Exit Sketch" } else { app.tr("ui.finish_sketch") }).color(Color32::WHITE),
+                )
+                .fill(t.accent),
+            );
             crate::scenario::publish_rect("sketch_palette:finish", button.rect);
             crate::scenario::publish_handle("sketch_palette:finish", button.rect.center());
             if button.clicked() {
                 finish = true;
             }
         });
+        if app.preferences.feature_workspace {
+            ui.set_min_height((bottom - frame.inner_margin.bottomf() - frame.stroke.width - ui.cursor().top()).max(0.0));
+        }
     });
     app.viewport.palette_rect = response.map(|r| r.response.rect);
     if let Some(r) = app.viewport.palette_rect {

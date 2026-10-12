@@ -2347,7 +2347,11 @@ pub(crate) fn refresh_layout(app: &mut SolveApp, scale: f32) {
         .into_iter()
         .flatten()
         .collect();
-        app.viewport.layout = Some(crate::viewport_layout::Layout::new(rect, &docks, scale));
+        app.viewport.layout = Some(if app.preferences.feature_workspace {
+            crate::viewport_layout::Layout::workspace(rect, &docks, scale, true)
+        } else {
+            crate::viewport_layout::Layout::new(rect, &docks, scale)
+        });
     }
 }
 
@@ -2513,7 +2517,10 @@ fn axis_view(app: &mut SolveApp, ui: &mut egui::Ui, rect: Rect) {
     let t = Tokens::get();
     let c = axis_center(app, rect);
     let orbiting = axis_view_orbit(app, ui, rect);
-    let tips = axis_tips(&app.cam, c);
+    let mut tips = axis_tips(&app.cam, c);
+    if app.preferences.feature_workspace {
+        tips.retain(|(name, ..)| !name.starts_with('-'));
+    }
     let hover = ui.input(|i| i.pointer.hover_pos()).filter(|_| ui.rect_contains_pointer(rect));
     let hovered = if orbiting { None } else { hover.and_then(|p| axis_hit(&tips, p)) };
     let painter = ui.painter_at(rect);
@@ -2531,14 +2538,20 @@ fn axis_view(app: &mut SolveApp, ui: &mut egui::Ui, rect: Rect) {
         let col = Color32::from_rgb(col.0, col.1, col.2);
         let positive = !name.starts_with('-');
         let ink = if *depth < -0.01 { col.gamma_multiply(0.55) } else { col };
-        painter.line_segment([c, *at], Stroke::new(if positive { 2.0 } else { 1.0 }, ink));
-        painter.circle_filled(*at, AXIS_RADIUS, if hovered == Some(i) { t.accent_soft } else { t.overlay });
-        painter.circle_stroke(
-            *at,
-            AXIS_RADIUS,
-            Stroke::new(if hovered == Some(i) { 2.0 } else { 1.0 }, if hovered == Some(i) { t.accent } else { ink }),
-        );
-        painter.text(*at, Align2::CENTER_CENTER, name.to_uppercase(), FontId::proportional(11.0), ink);
+        if app.preferences.feature_workspace {
+            let direction = *at - c;
+            painter.arrow(c, direction, Stroke::new(if hovered == Some(i) { 3.0 } else { 2.0 }, ink));
+            painter.text(*at + direction.normalized() * 10.0, Align2::CENTER_CENTER, name.to_uppercase(), FontId::proportional(12.0), ink);
+        } else {
+            painter.line_segment([c, *at], Stroke::new(if positive { 2.0 } else { 1.0 }, ink));
+            painter.circle_filled(*at, AXIS_RADIUS, if hovered == Some(i) { t.accent_soft } else { t.overlay });
+            painter.circle_stroke(
+                *at,
+                AXIS_RADIUS,
+                Stroke::new(if hovered == Some(i) { 2.0 } else { 1.0 }, if hovered == Some(i) { t.accent } else { ink }),
+            );
+            painter.text(*at, Align2::CENTER_CENTER, name.to_uppercase(), FontId::proportional(11.0), ink);
+        }
         crate::scenario::publish_handle(&format!("axis_view:{name}"), *at);
     }
     crate::scenario::publish_count("axis_view_highlights", f64::from(u8::from(hovered.is_some())));
@@ -2695,8 +2708,8 @@ fn nav_bar(app: &mut SolveApp, ui: &mut egui::Ui, rect: Rect) {
 fn view_menu(app: &mut SolveApp, ui: &mut egui::Ui, button: Rect) -> bool {
     let area = crate::frame::area(egui::Id::new("sc_view_menu"))
         .order(egui::Order::Foreground)
-        .pivot(Align2::RIGHT_BOTTOM)
-        .fixed_pos(button.right_top() - vec2(0.0, 6.0));
+        .pivot(if app.preferences.feature_workspace { Align2::RIGHT_TOP } else { Align2::RIGHT_BOTTOM })
+        .fixed_pos(if app.preferences.feature_workspace { button.right_bottom() + vec2(0.0, 6.0) } else { button.right_top() - vec2(0.0, 6.0) });
     let r = area.show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.set_width(220.0);

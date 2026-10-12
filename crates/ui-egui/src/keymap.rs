@@ -65,11 +65,17 @@ pub fn key_name(key: egui::Key, mods: egui::Modifiers) -> String {
 
 /// The key a command runs from now.
 pub fn effective(app: &SolveApp, id: &str) -> Option<String> {
-    match app.keymap.custom.get(id) {
+    let key = match app.keymap.custom.get(id) {
         Some(k) if k.is_empty() => None,
         Some(k) => Some(k.clone()),
         None => solvecraft_engine::find_command(id).and_then(|c| c.shortcut).map(str::to_string),
-    }
+    };
+    key.filter(|k| !feature_reserved(app, k))
+}
+
+fn feature_reserved(app: &SolveApp, key: &str) -> bool {
+    app.preferences.feature_workspace
+        && ["F", "Z", "Shift+Z", "Space", "Ctrl+1", "Ctrl+2", "Ctrl+3", "Ctrl+4", "Ctrl+5", "Ctrl+6", "Ctrl+7", "Ctrl+8"].contains(&key)
 }
 
 /// Commands bound to `key` now.
@@ -86,7 +92,7 @@ pub fn command_for(app: &SolveApp, key: &str) -> Option<&'static str> {
 /// use the key unless `replace` (they lose it).
 pub fn bind(app: &mut SolveApp, id: &str, key: &str, replace: bool) -> Result<(), String> {
     let spec = solvecraft_engine::find_command(id).ok_or_else(|| format!("no command `{id}`"))?;
-    if RESERVED.contains(&key) {
+    if RESERVED.contains(&key) || feature_reserved(app, key) {
         return Err(format!("{key} is used by SolidCraft itself"));
     }
     if !key.is_empty() {

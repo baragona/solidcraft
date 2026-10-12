@@ -503,14 +503,14 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
     let mut acts = Actions::default();
     egui::Panel::left("sc_browser")
         .exact_size(if app.preferences.feature_workspace {
-            app.dialog.as_ref().map_or(250.0, |d| if d.is_wide() { 560.0 } else { 380.0 })
+            app.dialog.as_ref().map_or(if app.session.active_sketch.is_some() { 300.0 } else { 250.0 }, |d| if d.is_wide() { 560.0 } else { 380.0 })
         } else {
             250.0
         })
         .resizable(false)
         .frame(egui::Frame::NONE.fill(t.panel).inner_margin(egui::Margin::symmetric(6, 6)))
         .show(ui, |ui| {
-            if app.preferences.feature_workspace && app.dialog.is_some() {
+            if app.preferences.feature_workspace && (app.dialog.is_some() || app.session.active_sketch.is_some()) {
                 return;
             }
             ui.label(RichText::new(if app.preferences.feature_workspace { "FEATURES" } else { "BROWSER" }).size(11.0).strong().color(t.text_dim));
@@ -523,7 +523,9 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
                     component_rows(app, ui, 0, 0, &mut acts);
                     if app.preferences.feature_workspace {
                         ui.separator();
+                        app.viewport.hover_bodies.clear();
                         crate::timeline::feature_tree(app, ui);
+                        acts.hover_bodies.extend(std::mem::take(&mut app.viewport.hover_bodies));
                     }
                 });
         });
@@ -630,6 +632,9 @@ fn component_rows(app: &mut SolveApp, ui: &mut egui::Ui, id: u64, depth: usize, 
     }
     let _ = t;
     for folder in ["bodies", "sketches", "construction"] {
+        if app.preferences.feature_workspace && folder == "sketches" {
+            continue;
+        }
         folder_rows(app, ui, id, folder, d, acts);
     }
     if id == 0 {
