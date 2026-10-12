@@ -2,7 +2,7 @@
 
 use egui::{Color32, Rect, Sense, Stroke, UiBuilder, pos2, vec2};
 use serde_json::json;
-use solvecraft_engine::doc::FeatureKind;
+use solvecraft_engine::doc::{FeatureKind, Operation};
 
 use crate::theme::Tokens;
 use crate::{SolveApp, icons};
@@ -10,6 +10,7 @@ use crate::{SolveApp, icons};
 fn icon_of(k: &FeatureKind) -> &'static str {
     match k {
         FeatureKind::Sketch { .. } => "sketch",
+        FeatureKind::Extrude { operation: Operation::Cut, .. } => "extrude_cut",
         FeatureKind::Extrude { .. } => "extrude",
         FeatureKind::Revolve { .. } => "revolve",
         FeatureKind::Fillet { .. } => "fillet",
@@ -188,7 +189,9 @@ fn rollback_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
 fn feature_tree_row(app: &mut SolveApp, ui: &mut egui::Ui, feature: &solvecraft_engine::doc::Feature, rolled: bool) -> egui::Response {
     let id = feature.id;
     let selected = app.session.selection.iter().any(|s| matches!(s, solvecraft_engine::Sel::Feature { id: selected } if *selected == id));
-    let error = app.session.model.result(id).and_then(|r| r.error.clone());
+    let result = app.session.model.result(id);
+    let error = result.and_then(|r| r.error.clone());
+    let warning = result.and_then(|r| r.warning.clone());
     let t = Tokens::get();
     let ink = if error.is_some() {
         t.error
@@ -199,7 +202,21 @@ fn feature_tree_row(app: &mut SolveApp, ui: &mut egui::Ui, feature: &solvecraft_
     };
     let (rect, _) = ui.allocate_exact_size(vec2(18.0, 20.0), Sense::hover());
     icons::paint(ui.painter(), rect.shrink(2.0), icon_of(&feature.kind), ink, t.icon_fill, t.accent);
-    let response = ui.push_id(("feature_tree", id), |ui| ui.selectable_label(selected, egui::RichText::new(&feature.name).color(ink))).inner;
+    if warning.is_some() && error.is_none() {
+        icons::paint(
+            ui.painter(),
+            Rect::from_min_size(rect.right_bottom() - vec2(9.0, 9.0), vec2(9.0, 9.0)),
+            "warning",
+            t.icon,
+            t.warning,
+            t.warning,
+        );
+    }
+    let mut text = egui::RichText::new(&feature.name).color(ink);
+    if feature.suppressed {
+        text = text.strikethrough();
+    }
+    let response = ui.push_id(("feature_tree", id), |ui| ui.selectable_label(selected, text)).inner;
     crate::scenario::publish_handle(&format!("feature:{}", feature.name), response.rect.center());
     crate::scenario::publish_handle(&format!("feature-id:{id}"), response.rect.center());
     if response.clicked() {
@@ -241,10 +258,25 @@ fn feature_tree_row(app: &mut SolveApp, ui: &mut egui::Ui, feature: &solvecraft_
             ui.close();
         }
     });
-    if let Some(error) = error {
-        response.clone().on_hover_text(error);
+    let kind = match &feature.kind {
+        FeatureKind::Extrude { operation: Operation::Cut, .. } => "Cut-Extrude",
+        FeatureKind::Extrude { operation: Operation::NewBody | Operation::Join, .. } => "Boss-Extrude",
+        FeatureKind::Extrude { operation: Operation::Intersect, .. } => "Intersect-Extrude",
+        _ => feature.kind.base_name(),
+    };
+    let mut tip = format!("{} ({kind})", feature.name);
+    if feature.suppressed {
+        tip.push_str("\nSuppressed");
+    } else if rolled {
+        tip.push_str("\nRolled back");
     }
-    response
+    if let Some(error) = error {
+        tip.push_str(&format!("\nError: {error}"));
+    }
+    if let Some(warning) = warning {
+        tip.push_str(&format!("\nWarning: {warning}"));
+    }
+    response.on_hover_text(tip)
 }
 
 pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {

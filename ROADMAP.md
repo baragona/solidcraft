@@ -16,7 +16,8 @@ and Ctrl/Cmd+1–8. The Features toolbar prioritizes profile-based features, fil
 shell/draft and reference tools ahead of assembly controls. The Sketch toolbar prioritizes dimensions, basic shapes, trim and offset,
 with Exit Sketch first so it remains visible in narrow windows. Existing sketches open framed
 within the left-pane layout, and sketch Fit reserves space for default dimension annotations. Separate Extruded Boss/Base and Extruded Cut entries choose explicit material operations and
-use matching property-pane headings. Revolve and the remaining feature workflows still need refinement.
+use matching property-pane headings. The tree distinguishes cut icons, marks suppressed
+features with a strike-through, and exposes feature types and warnings on hover. Revolve and the remaining feature workflows still need refinement.
 
 ## At a glance
 
