@@ -311,7 +311,7 @@ impl Dialog {
 
     pub fn for_command(app: &SolveApp, id: &str) -> Option<Dialog> {
         let s = &app.session;
-        let has_bodies = !s.world_state().bodies.is_empty();
+        let has_bodies = s.world_state().bodies.iter().any(|body| body.component == s.active_component);
         let mut d = match id {
             "sketch.create" => Dialog::new(Kind::Sketch, vec![SelInput::new("Plane", PLANES | PLANAR_FACES, false)]),
             "solid.extrude" | "solid.extrude.boss" | "solid.extrude.cut" => Dialog::new(
@@ -329,8 +329,18 @@ impl Dialog {
                 },
                 vec![SelInput::new("Profiles", PROFILES | PLANAR_FACES, true)],
             ),
-            "solid.revolve" => Dialog::new(
-                Kind::Revolve { angle: "360 deg".into(), operation: 0, axis: None },
+            "solid.revolve" | "solid.revolve.boss" | "solid.revolve.cut" => Dialog::new(
+                Kind::Revolve {
+                    angle: "360 deg".into(),
+                    operation: if id == "solid.revolve.cut" {
+                        2
+                    } else if id == "solid.revolve.boss" {
+                        usize::from(has_bodies)
+                    } else {
+                        0
+                    },
+                    axis: None,
+                },
                 vec![SelInput::new("Profile", PROFILES, true), SelInput::new("Axis", AXES, false)],
             ),
             "solid.fillet" => Dialog::new(fillet_kind("2 mm", false), vec![SelInput::new("Edges", EDGES | FACES, true)]),
@@ -1285,6 +1295,8 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
         match &d.kind {
             Kind::Extrude { operation: 0 | 1, .. } => "Boss-Extrude",
             Kind::Extrude { operation: 2, .. } => "Cut-Extrude",
+            Kind::Revolve { operation: 0 | 1, .. } => "Revolve",
+            Kind::Revolve { operation: 2, .. } => "Revolved Cut",
             _ => title(&d.kind),
         }
     } else {

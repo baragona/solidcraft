@@ -12,6 +12,7 @@ fn icon_of(k: &FeatureKind) -> &'static str {
         FeatureKind::Sketch { .. } => "sketch",
         FeatureKind::Extrude { operation: Operation::Cut, .. } => "extrude_cut",
         FeatureKind::Extrude { .. } => "extrude",
+        FeatureKind::Revolve { operation: Operation::Cut, .. } => "revolve_cut",
         FeatureKind::Revolve { .. } => "revolve",
         FeatureKind::Fillet { .. } => "fillet",
         FeatureKind::Chamfer { .. } => "chamfer",
@@ -262,6 +263,8 @@ fn feature_tree_row(app: &mut SolveApp, ui: &mut egui::Ui, feature: &solvecraft_
         FeatureKind::Extrude { operation: Operation::Cut, .. } => "Cut-Extrude",
         FeatureKind::Extrude { operation: Operation::NewBody | Operation::Join, .. } => "Boss-Extrude",
         FeatureKind::Extrude { operation: Operation::Intersect, .. } => "Intersect-Extrude",
+        FeatureKind::Revolve { operation: Operation::Cut, .. } => "Revolved Cut",
+        FeatureKind::Revolve { operation: Operation::NewBody | Operation::Join, .. } => "Revolved Boss/Base",
         _ => feature.kind.base_name(),
     };
     let mut tip = format!("{} ({kind})", feature.name);

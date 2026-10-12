@@ -84,11 +84,15 @@ pub fn paint(p: &Painter, r: Rect, name: &str, ink: Color32, fill: Color32, acce
             pen.circle(12.0, 12.0, 2.0, ink, ink);
             pen.arrow((12.0, 2.5), (12.0, 9.0), a);
         }
-        "revolve" => {
+        "revolve" | "revolve_cut" => {
             pen.line(&[(12.0, 2.0), (12.0, 22.0)], ink);
             pen.poly(&[(13.0, 7.0), (19.0, 7.0), (19.0, 17.0), (13.0, 17.0)], pen.fill, ink);
             pen.arc(12.0, 12.0, 9.0, 3.6, 5.8, a);
             pen.arrow((15.0, 20.4), (18.5, 19.0), a);
+            if name == "revolve_cut" {
+                pen.line(&[(15.0, 11.0), (18.0, 11.0)], a);
+                pen.line(&[(15.0, 14.0), (18.0, 14.0)], a);
+            }
         }
         "box" => pen.iso_box(3.0, 9.0, 10.0, 8.0, 9.0),
         "cylinder" => {

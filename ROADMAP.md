@@ -17,7 +17,8 @@ shell/draft and reference tools ahead of assembly controls. The Sketch toolbar p
 with Exit Sketch first so it remains visible in narrow windows. Existing sketches open framed
 within the left-pane layout, and sketch Fit reserves space for default dimension annotations. Separate Extruded Boss/Base and Extruded Cut entries choose explicit material operations and
 use matching property-pane headings. The tree distinguishes cut icons, marks suppressed
-features with a strike-through, and exposes feature types and warnings on hover. Revolve and the remaining feature workflows still need refinement.
+features with a strike-through, and exposes feature types and warnings on hover. Revolve also has separate Boss/Base and Cut entries, matching property headings and cut icons.
+Sweep, loft and the remaining feature workflows still need refinement.
 
 ## At a glance
 

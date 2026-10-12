@@ -784,6 +784,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explicit_revolve_entries_choose_additive_and_cut_operations() {
+        let mut h = crate::scenario::Harness::new();
+        h.app.run("solid.box", json!({"length":20,"width":20,"height":10})).unwrap();
+        for (command, expected) in [("solid.revolve.boss", 1), ("solid.revolve.cut", 2)] {
+            h.app.start(command);
+            assert!(matches!(h.app.dialog.as_ref().map(|d| &d.kind),
+                Some(crate::dialogs::Kind::Revolve { operation, .. }) if *operation == expected));
+        }
+    }
+
+    #[test]
     fn explicit_extrude_entries_disable_operation_guessing() {
         let mut h = crate::scenario::Harness::new();
         h.app.run("solid.box", json!({"length":20,"width":20,"height":10})).unwrap();

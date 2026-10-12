@@ -124,3 +124,7 @@ Cut (`solid.extrude.cut`) entries. Both accept the geometric parameters of `soli
 Boss defaults to `join` when the active component has a body, otherwise `new`; its explicit
 operation must be `new` or `join`. Cut always uses `cut` and rejects conflicting operations.
 The original `solid.extrude` command and its automatic operation remain available.
+
+`solid.revolve.boss` and `solid.revolve.cut` provide the same explicit additive/subtractive
+operation rules for the parameters of `solid.revolve`. The feature workspace exposes both
+as separate toolbar entries; the original generic revolve command remains available.

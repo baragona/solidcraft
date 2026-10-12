@@ -114,6 +114,12 @@ pub static COMMANDS: &[CommandSpec] = &[
     CommandSpec::new("solid.extrude.cut", "Extruded Cut", extrude_cut)
         .at("SOLID", "CREATE").icon("extrude_cut")
         .params("Parameters as solid.extrude; operation is always cut."),
+    CommandSpec::new("solid.revolve.boss", "Revolved Boss/Base", revolve_boss)
+        .at("SOLID", "CREATE").icon("revolve")
+        .params("Parameters as solid.revolve; operation defaults to join in a component with bodies, otherwise new. Explicit operation may be new or join."),
+    CommandSpec::new("solid.revolve.cut", "Revolved Cut", revolve_cut)
+        .at("SOLID", "CREATE").icon("revolve_cut")
+        .params("Parameters as solid.revolve; operation is always cut."),
 ];
 
 /// Where an extrude starts and which way is positive: a point inside the (first) profile or
@@ -451,31 +457,50 @@ pub(super) fn add_feature(s: &mut Session, p: &Value, kind: FeatureKind) -> Resu
     Ok(json!({"feature": id, "name": fname, "bodies": bodies, "ms": r.map(|r| r.ms)}))
 }
 
-fn extrude_boss(s: &mut Session, p: &Value) -> Result<Value> {
-    let mut params = p.as_object().cloned().ok_or_else(|| bad("solid.extrude.boss", "parameters must be an object"))?;
-    let operation = match str_(p, "operation") {
-        Some("new") => "new",
-        Some("join") => "join",
-        Some(_) => return Err(bad("solid.extrude.boss", "operation must be new or join")),
-        None => {
-            if s.world_state().bodies.iter().any(|body| body.component == s.active_component) {
-                "join"
-            } else {
-                "new"
+/// Explicit additive/subtractive entry points share their operation validation.
+fn material_params(s: &Session, p: &Value, cmd: &str, cut: bool) -> Result<Value> {
+    let mut params = p.as_object().cloned().ok_or_else(|| bad(cmd, "parameters must be an object"))?;
+    let operation = if cut {
+        if str_(p, "operation").is_some_and(|op| op != "cut") {
+            return Err(bad(cmd, "operation must be cut"));
+        }
+        "cut"
+    } else {
+        match str_(p, "operation") {
+            Some("new") => "new",
+            Some("join") => "join",
+            Some(_) => return Err(bad(cmd, "operation must be new or join")),
+            None => {
+                if s.world_state().bodies.iter().any(|body| body.component == s.active_component) {
+                    "join"
+                } else {
+                    "new"
+                }
             }
         }
     };
     params.insert("operation".into(), json!(operation));
-    extrude(s, &Value::Object(params))
+    Ok(Value::Object(params))
+}
+
+fn extrude_boss(s: &mut Session, p: &Value) -> Result<Value> {
+    let p = material_params(s, p, "solid.extrude.boss", false)?;
+    extrude(s, &p)
 }
 
 fn extrude_cut(s: &mut Session, p: &Value) -> Result<Value> {
-    let mut params = p.as_object().cloned().ok_or_else(|| bad("solid.extrude.cut", "parameters must be an object"))?;
-    if str_(p, "operation").is_some_and(|op| op != "cut") {
-        return Err(bad("solid.extrude.cut", "operation must be cut"));
-    }
-    params.insert("operation".into(), json!("cut"));
-    extrude(s, &Value::Object(params))
+    let p = material_params(s, p, "solid.extrude.cut", true)?;
+    extrude(s, &p)
+}
+
+fn revolve_boss(s: &mut Session, p: &Value) -> Result<Value> {
+    let p = material_params(s, p, "solid.revolve.boss", false)?;
+    revolve(s, &p)
+}
+
+fn revolve_cut(s: &mut Session, p: &Value) -> Result<Value> {
+    let p = material_params(s, p, "solid.revolve.cut", true)?;
+    revolve(s, &p)
 }
 
 fn extrude(s: &mut Session, p: &Value) -> Result<Value> {
@@ -1466,6 +1491,25 @@ mod offset_edit_guard_tests;
 #[cfg(test)]
 mod extrude_workflow_tests {
     use super::*;
+
+    #[test]
+    fn revolved_boss_and_cut_remove_the_expected_annulus() {
+        let mut s = Session::default();
+        s.execute("sketch.create", &json!({"plane":"XY"})).unwrap();
+        s.execute("sketch.rectangle.two_point", &json!({"p0":[5,0],"p1":[10,20]})).unwrap();
+        s.execute("solid.revolve.boss", &json!({"axis":"y"})).unwrap();
+        s.execute("sketch.create", &json!({"plane":"XY"})).unwrap();
+        s.execute("sketch.rectangle.two_point", &json!({"p0":[7,5],"p1":[9,15]})).unwrap();
+        let before = s.doc.to_json();
+        assert!(s.execute("solid.revolve.cut", &json!({"axis":"y","operation":"new"})).is_err());
+        assert!(s.execute("solid.revolve.boss", &json!({"axis":"y","operation":"cut"})).is_err());
+        assert_eq!(s.doc.to_json(), before);
+        s.execute("solid.revolve.cut", &json!({"axis":"y"})).unwrap();
+        let volume = s.execute("inspect.measure", &json!({})).unwrap()["total"]["volume_mm3"].as_f64().unwrap();
+        let expected = std::f64::consts::PI * ((100.0 - 25.0) * 20.0 - (81.0 - 49.0) * 10.0);
+        // Volume is measured from the tessellated circular surfaces.
+        assert!((volume - expected).abs() < expected * 1e-3, "{volume} != {expected}");
+    }
 
     #[test]
     fn boss_and_cut_have_explicit_material_semantics() {
